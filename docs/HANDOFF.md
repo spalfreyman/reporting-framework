@@ -265,3 +265,25 @@ GA4_API_SECRET. MP only accepts events <72h old, so GA4 fills via the live loop,
 historical seed. To go live: provide the GA4 property id + MP secret + Data API
 service-account and flip connectors/ga4 MODE=live (see tools/event-generator/README.md).
 Storefront (clickable) is the remaining deferred piece.
+
+
+## GA4 wired LIVE to a real property (2026-08-21)
+
+connectors/ga4 is now MODE=live against GA4 property 550932835 (project ct-sales-207211),
+service account sam-palfreyman@ct-sales-207211.iam.gserviceaccount.com (Viewer on the
+property; Analytics Data API enabled). Key is in connectors/ga4/ga4-source/.env as
+GA4_SERVICE_ACCOUNT_JSON (gitignored); raw key file was deleted. Live descriptor registered
+in reporting.datasources/ga4.
+
+The generator (tools/event-generator) sends matching GA4 events via Measurement Protocol
+(GA4_MEASUREMENT_ID=G-QR35DBG36Y). Realtime confirmed the full funnel landing
+(view_item/add_to_cart/begin_checkout/purchase). GA4 STANDARD reporting (what runReport /
+the framework reads) lags a few hours behind Realtime, so the funnel/conversion tiles fill
+after that lag; a live query returns status=empty (not an error) until then.
+
+Two GA4-connector date bugs fixed this session (live.ts): endDate was compacted to YYYYMMDD
+(Data API needs YYYY-MM-DD), and the half-open [from,to) range was passed as GA4's INCLUSIVE
+endDate — now endDate = to − 1 day. post-deploy probe was using a zero-width range; fixed.
+
+Reminder: MP only accepts events <72h old, so GA4 history grows from the live loop, not the
+90-day order backfill. Full gate: 227 tests across 11 packages, green.

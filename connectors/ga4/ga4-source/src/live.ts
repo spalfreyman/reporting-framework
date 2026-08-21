@@ -3,7 +3,8 @@ import { readConfiguration } from './env.js';
 import { DspFailure } from './shared/dsp/server.js';
 import { getMetric } from './shared/semantic/metrics.js';
 import type { ColumnMeta, SourceQuery } from './shared/schema/query.js';
-import { DIMENSION_TO_GA4, METRIC_TO_GA4, ga4DateToIso, isoDateToGa4 } from './translate.js';
+import { DIMENSION_TO_GA4, METRIC_TO_GA4, ga4DateToIso } from './translate.js';
+import { addDays } from './shared/util/date-range.js';
 
 /**
  * The live GA4 Data API path.
@@ -57,7 +58,9 @@ export const runGa4Report = async (
 
   const [response] = await getClient().runReport({
     property: `properties/${config.GA4_PROPERTY_ID}`,
-    dateRanges: [{ startDate: query.timeRange.from, endDate: isoDateToGa4(query.timeRange.to) }],
+    // GA4 wants YYYY-MM-DD and an INCLUSIVE endDate; our timeRange is half-open [from, to),
+    // so the inclusive end is the day before `to`.
+    dateRanges: [{ startDate: query.timeRange.from, endDate: addDays(query.timeRange.to, -1) }],
     dimensions: ga4Dimensions,
     metrics: ga4Metrics,
     limit: 100_000,

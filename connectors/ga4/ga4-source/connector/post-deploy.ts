@@ -28,7 +28,12 @@ const main = async (): Promise<void> => {
 
   if (config.MODE === 'live') {
     const { runGa4Report } = await import('../src/live.js');
+    const { addDays } = await import('../src/shared/util/date-range.js');
     const today = new Date().toISOString().slice(0, 10);
+    // A real, non-empty window: timeRange is half-open, so from=7 days ago, to=tomorrow
+    // covers the last week including today. (from===to would be a zero-width range.)
+    const from = addDays(today, -7);
+    const to = addDays(today, 1);
     await runGa4Report({
       protocolVersion: 1,
       requestId: 'post-deploy-probe',
@@ -36,7 +41,7 @@ const main = async (): Promise<void> => {
       metrics: ['sessions.count'],
       dimensions: [],
       grain: 'day',
-      timeRange: { from: today, to: today },
+      timeRange: { from, to },
       timezone: config.GA4_TIMEZONE,
       filters: [],
       scope: { unrestricted: true },

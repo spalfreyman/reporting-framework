@@ -41,6 +41,8 @@ const SEED = num('GEN_SEED', 42);
 const CONCURRENCY = num('GEN_CONCURRENCY', 6);
 const LOOP_INTERVAL_MS = num('GEN_LOOP_INTERVAL_MS', 60_000);
 const LOOP_ORDERS = num('GEN_LOOP_ORDERS', 3);
+/** 0 = run forever; >0 = stop cleanly after this many ticks (for a bounded background run). */
+const LOOP_MAX_TICKS = num('GEN_LOOP_MAX_TICKS', 0);
 
 const log = (message: string, extra: Record<string, unknown> = {}): void => {
   process.stdout.write(`${JSON.stringify({ message, ...extra, at: new Date().toISOString() })}\n`);
@@ -246,6 +248,14 @@ const loop = async (client: CtClient): Promise<void> => {
       added: LOOP_ORDERS,
       ...(ga4 ? { ga4Sent: ga4.sent, ga4Failed: ga4.failed } : {}),
     });
+    if (LOOP_MAX_TICKS > 0 && tick >= LOOP_MAX_TICKS) {
+      log('live loop finished', {
+        ticks: tick,
+        ordersCreated: tick * LOOP_ORDERS,
+        ...(ga4 ? { ga4Sent: ga4.sent, ga4Failed: ga4.failed } : {}),
+      });
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, LOOP_INTERVAL_MS));
   }
 };
