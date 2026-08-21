@@ -3,3 +3,7 @@ dist/
 .env
 src/shared/
 .shared-hash
+*.json.key
+service-account*.json
+.ga4-key.json
+ga4-key.json
