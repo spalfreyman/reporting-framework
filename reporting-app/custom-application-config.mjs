@@ -20,7 +20,12 @@ const config = {
 
   env: {
     development: {
-      initialProjectKey: '${env:INITIAL_PROJECT_KEY}',
+      // A literal, per the commercetools custom-application template — NOT an ${env:...}
+      // placeholder. This block is only read by local `mc-scripts start`; Connect builds the
+      // app under NODE_ENV=development and resolves this block during compile-html, so a
+      // required env placeholder here fails the build. The production block below is what a
+      // deployed app actually uses.
+      initialProjectKey: 'sp-demo',
     },
     production: {
       applicationId: '${env:CUSTOM_APPLICATION_ID}',
