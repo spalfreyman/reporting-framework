@@ -1,0 +1,7 @@
+query FetchGatewayConfig {
+  customObject(container: "reporting.config", key: "gateway") {
+    id
+    version
+    value
+  }
+}

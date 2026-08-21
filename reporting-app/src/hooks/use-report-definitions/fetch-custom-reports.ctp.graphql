@@ -1,0 +1,10 @@
+query FetchCustomReports {
+  customObjects(container: "reporting.reports", limit: 200) {
+    results {
+      id
+      version
+      key
+      value
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "ga4-prewarm-job",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nightly GA4 cache pre-warm. Fetches the common report windows into the ga4-source cache before business hours, so dashboards never spend the property's shared token budget interactively.",
+  "main": "dist/src/index.js",
+  "type": "module",
+  "scripts": {
+    "sync:shared": "node scripts/sync-shared.mjs --with-node",
+    "prebuild": "npm run sync:shared",
+    "build": "tsc",
+    "start": "node dist/src/index.js",
+    "pretest": "npm run sync:shared",
+    "test": "tsc --noEmit && vitest run"
+  },
+  "dependencies": {
+    "@commercetools/platform-sdk": "^9.4.0",
+    "@commercetools/ts-client": "^5.0.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "5.9.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": { "node": ">=22 <23" }
+}

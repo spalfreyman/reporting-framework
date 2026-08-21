@@ -1,0 +1,28 @@
+{
+  "name": "commercetools-reporting-framework",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tooling hub for the commercetools reporting framework. NOT an npm-workspaces root: Connect runs `install` inside each app folder independently.",
+  "scripts": {
+    "sync:shared": "node scripts/sync-shared.mjs --all",
+    "check:connect": "node scripts/check-connect-invariants.mjs",
+    "check:versions": "node scripts/check-versions.mjs",
+    "check:reports": "node scripts/validate-reports.mjs",
+    "format": "prettier --write \"**/*.{js,mjs,cjs,ts,tsx,json,yaml,yml,md,graphql}\"",
+    "format:check": "prettier --check \"**/*.{js,mjs,cjs,ts,tsx,json,yaml,yml,md,graphql}\"",
+    "ci": "yarn check:connect && yarn check:versions && yarn check:shared && yarn check:reports && yarn typecheck && yarn test",
+    "test": "node scripts/fan-out.mjs test",
+    "typecheck": "node scripts/fan-out.mjs typecheck",
+    "check:shared": "node scripts/sync-shared.mjs --check",
+    "lint": "node scripts/fan-out.mjs lint"
+  },
+  "devDependencies": {
+    "prettier": "2.8.8"
+  },
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "dependencies": {
+    "tsx": "^4.23.12"
+  }
+}

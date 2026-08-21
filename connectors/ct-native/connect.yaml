@@ -1,0 +1,76 @@
+# commercetools native reporting data source.
+#
+# A SEPARATE, independently installable connector. It is inert to the framework's own
+# deploy: the root connect.yaml never names it, and Connect only reads the connect.yaml at
+# a repository root. To ship it for real:
+#
+#   node scripts/split-connector.mjs ct-native ../reporting-source-ct-native
+#
+# It registers itself by writing a capability descriptor to Custom Object
+# reporting.datasources/<SOURCE_ID> in postDeploy, which is how the gateway discovers it
+# with no framework redeploy.
+deployAs:
+  - name: ct-native-source
+    applicationType: service
+    endpoint: /ct-native-source
+    scripts:
+      postDeploy: npm install && npm run build && npm run connector:post-deploy
+      preUndeploy: npm install && npm run build && npm run connector:pre-undeploy
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          description: commercetools project key. The source registers itself here.
+          required: true
+        - key: CTP_REGION
+          description: Region of the commercetools project.
+          required: true
+          default: 'europe-west1.gcp'
+        - key: SOURCE_ID
+          description: >-
+            Registry id, unique per install. Writes Custom Object
+            reporting.datasources/<SOURCE_ID>.
+          required: true
+          default: 'ct-native'
+        - key: SOURCE_DISPLAY_NAME
+          description: Label shown in the Merchant Center data-source admin page.
+          required: false
+          default: 'commercetools'
+        - key: MODE
+          description: >-
+            'live' queries commercetools. 'demo' serves deterministic fixtures so the whole
+            framework is demonstrable on a project with no order history.
+          required: true
+          default: 'live'
+        - key: ROLLUP_TIMEZONE
+          description: >-
+            IANA timezone the rollup cut its day buckets in. MUST match the framework's
+            ROLLUP_TIMEZONE, or day-grain figures will not line up.
+          required: true
+          default: 'UTC'
+        - key: PRICE_BANDS
+          description: >-
+            JSON array of price-band boundaries in minor units, used for the live price
+            ladder facet. Example: [1000,5000,20000,100000]
+          required: false
+          default: '[1000,5000,20000,100000]'
+        - key: CACHE_TTL_SECONDS
+          description: TTL for live catalogue facet responses.
+          required: false
+          default: '600'
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          description: >-
+            API client ID. Scopes: view_products, view_published_products, view_orders,
+            view_customers, view_stores, view_discount_codes, manage_key_value_documents.
+          required: true
+        - key: CTP_CLIENT_SECRET
+          description: commercetools API client secret.
+          required: true
+        - key: CTP_SCOPE
+          description: Space-separated OAuth scopes.
+          required: true
+        - key: REPORTING_SHARED_SECRET
+          description: >-
+            Bearer secret presented by the reporting gateway. MUST equal the framework
+            connector's REPORTING_SHARED_SECRET. Verified with a timing-safe comparison.
+          required: true

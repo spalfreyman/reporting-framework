@@ -1,0 +1,22 @@
+{
+  "name": "@reporting/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework contracts: schemas, semantic registry, planner, framing, rollup keying. Copied into each app by scripts/sync-shared.mjs — never imported across the folder boundary.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "validate:catalogue": "tsx scripts/validate-catalogue.ts",
+    "test": "tsc --noEmit && vitest run && tsx scripts/validate-catalogue.ts",
+    "test:unit": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12",
+    "typescript": "5.9.2",
+    "vitest": "^2.1.8"
+  }
+}

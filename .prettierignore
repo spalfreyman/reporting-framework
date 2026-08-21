@@ -1,0 +1,6 @@
+**/dist/**
+**/public/**
+**/node_modules/**
+**/src/shared/**
+**/types/generated/**
+**/i18n/data/**

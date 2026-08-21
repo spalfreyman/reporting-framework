@@ -1,0 +1,68 @@
+# Data warehouse / lake reporting source — a SEPARATE, independently installable connector.
+# Split for real with:  node scripts/split-connector.mjs warehouse ../reporting-source-warehouse
+#
+# This is the SCALE tier: SKU- and customer-grain metrics, cost and margin, ad spend — the
+# things that push a rollup off the Custom Object tier. Same DSP contract as every source, so
+# switching to it is a config change, not a report rewrite.
+deployAs:
+  - name: warehouse-source
+    applicationType: service
+    endpoint: /warehouse-source
+    scripts:
+      postDeploy: npm install && npm run build && npm run connector:post-deploy
+      preUndeploy: npm install && npm run build && npm run connector:pre-undeploy
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          required: true
+          description: commercetools project key. The source registers itself here.
+        - key: CTP_REGION
+          required: true
+          default: 'europe-west1.gcp'
+          description: Region of the commercetools project.
+        - key: SOURCE_ID
+          required: true
+          default: 'warehouse'
+          description: Registry id, unique per install.
+        - key: SOURCE_DISPLAY_NAME
+          required: false
+          default: 'Data warehouse'
+          description: Label shown in the data-source admin page.
+        - key: WAREHOUSE_KIND
+          required: true
+          default: 'postgres'
+          description: One of postgres, bigquery, snowflake. Only postgres is fully implemented.
+        - key: MODE
+          required: true
+          default: 'demo'
+          description: >-
+            'live' runs whitelisted SQL against the warehouse. 'demo' runs the same queries
+            against bundled CSV fixtures through a tiny in-memory evaluator.
+        - key: WAREHOUSE_TIMEZONE
+          required: false
+          default: 'UTC'
+          description: Timezone the warehouse cuts its date columns in. Must match ROLLUP_TIMEZONE.
+        - key: MAX_ROWS
+          required: false
+          default: '50000'
+          description: Hard cap on rows returned per query.
+        - key: QUERY_TIMEOUT_MS
+          required: false
+          default: '25000'
+          description: Per-query timeout.
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          required: true
+          description: API client ID with manage_key_value_documents (self-registration).
+        - key: CTP_CLIENT_SECRET
+          required: true
+          description: API client secret.
+        - key: CTP_SCOPE
+          required: true
+          description: Space-separated OAuth scopes.
+        - key: REPORTING_SHARED_SECRET
+          required: true
+          description: Bearer secret the gateway presents. Must equal the framework secret.
+        - key: PG_CONNECTION_STRING
+          required: false
+          description: Postgres connection string (WAREHOUSE_KIND=postgres, MODE=live).

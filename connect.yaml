@@ -1,0 +1,195 @@
+# commercetools Reporting Framework
+#
+# Four root-sibling applications. Each folder name matches its deployAs[].name.
+#
+# There is deliberately NO top-level `inheritAs`: inheritAs.configuration applies to
+# EVERY application in the connector, including the merchant-center-custom-application,
+# which must never receive securedConfiguration. Each backend app therefore declares its
+# own CTP credentials.
+#
+# Deploy is single-pass: reporting-gateway's postDeploy writes its own injected
+# CONNECT_SERVICE_URL into Custom Object `reporting.config/gateway`, and the MC app reads
+# it at boot. No operator paste, no second redeploy.
+deployAs:
+  # ─────────────────────────────────────────────── Merchant Center custom application
+  - name: reporting-app
+    applicationType: merchant-center-custom-application
+    configuration:
+      standardConfiguration:
+        - key: CUSTOM_APPLICATION_ID
+          description: Application ID from Merchant Center > Organization Settings > Custom Applications.
+          required: true
+        - key: ENTRY_POINT_URI_PATH
+          description: Entry point URI path. Must match src/constants.ts entryPointUriPath.
+          required: true
+          default: 'reporting'
+        - key: CLOUD_IDENTIFIER
+          description: Cloud region identifier (gcp-eu, gcp-us, aws-eu, aws-us, gcp-au).
+          required: true
+          default: 'gcp-eu'
+        - key: REPORTING_GATEWAY_URL
+          description: >-
+            OPTIONAL override for the gateway base URL. Normally left empty: the gateway
+            publishes its own URL to Custom Object reporting.config/gateway on postDeploy
+            and the app discovers it at boot. Set only to pin a non-Connect gateway or for
+            local development.
+          required: false
+
+  # ─────────────────────────────────────────────── query gateway
+  - name: reporting-gateway
+    applicationType: service
+    endpoint: /gateway
+    scripts:
+      postDeploy: npm install && npm run build && npm run connector:post-deploy
+      preUndeploy: npm install && npm run build && npm run connector:pre-undeploy
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          description: commercetools Composable Commerce project key.
+          required: true
+        - key: CTP_REGION
+          description: Region of the project (e.g. europe-west1.gcp, us-central1.gcp, eu-central-1.aws).
+          required: true
+          default: 'europe-west1.gcp'
+        - key: CLOUD_IDENTIFIER
+          description: >-
+            Derives the Merchant Center session issuer for @commercetools-backend/express.
+            The JWT audience is derived from the injected CONNECT_SERVICE_URL origin.
+          required: true
+          default: 'gcp-eu'
+        - key: REPORTING_REQUIRED_PERMISSION
+          description: Merchant Center permission required to run any report.
+          required: false
+          default: 'ViewReporting'
+        - key: QUERY_TIMEOUT_MS
+          description: Per-data-source query timeout. The service hard limit is 5 minutes.
+          required: false
+          default: '25000'
+        - key: MAX_SOURCE_CONCURRENCY
+          description: Maximum parallel data-source calls per report run.
+          required: false
+          default: '4'
+        - key: CACHE_TTL_TODAY_SECONDS
+          description: TTL for results whose date range includes the current day.
+          required: false
+          default: '300'
+        - key: CACHE_TTL_SEALED_SECONDS
+          description: TTL for fully sealed historical ranges (see the sealed/hot cache split).
+          required: false
+          default: '604800'
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          description: >-
+            API client ID. Scopes: view_orders, view_products, view_customers, view_stores,
+            view_cart_discounts, view_discount_codes, manage_key_value_documents.
+          required: true
+        - key: CTP_CLIENT_SECRET
+          description: commercetools API client secret.
+          required: true
+        - key: CTP_SCOPE
+          description: Space-separated OAuth scopes for the API client.
+          required: true
+        - key: REPORTING_SHARED_SECRET
+          description: >-
+            Bearer secret the gateway presents to data-source connectors. Must match the
+            REPORTING_SHARED_SECRET configured on every installed data-source connector.
+          required: true
+
+  # ─────────────────────────────────────────────── incremental order-facts writer
+  - name: reporting-rollup-event
+    applicationType: event
+    endpoint: /rollup-event
+    scripts:
+      postDeploy: npm install && npm run build && npm run connector:post-deploy
+      preUndeploy: npm install && npm run build && npm run connector:pre-undeploy
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          description: commercetools Composable Commerce project key.
+          required: true
+        - key: CTP_REGION
+          description: Region of the project.
+          required: true
+          default: 'europe-west1.gcp'
+        - key: ROLLUP_TIMEZONE
+          description: >-
+            IANA timezone defining the reporting day boundary. MUST match the value on
+            reporting-rollup-job or day buckets will disagree.
+          required: true
+          default: 'UTC'
+        - key: SUBSCRIPTION_KEY
+          description: Key of the Subscription created by postDeploy.
+          required: false
+          default: 'reporting-rollup-event'
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          description: API client ID with view_orders, manage_subscriptions, manage_key_value_documents.
+          required: true
+        - key: CTP_CLIENT_SECRET
+          description: commercetools API client secret.
+          required: true
+        - key: CTP_SCOPE
+          description: Space-separated OAuth scopes.
+          required: true
+
+  # ─────────────────────────────────────────────── fold, reconcile, backfill
+  - name: reporting-rollup-job
+    applicationType: job
+    endpoint: /rollup-job
+    properties:
+      schedule: '*/10 * * * *'
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          description: commercetools Composable Commerce project key.
+          required: true
+        - key: CTP_REGION
+          description: Region of the project.
+          required: true
+          default: 'europe-west1.gcp'
+        - key: ROLLUP_TIMEZONE
+          description: >-
+            IANA timezone defining the reporting day boundary. MUST match the value on
+            reporting-rollup-event.
+          required: true
+          default: 'UTC'
+        - key: ROLLUP_CUBES
+          description: Comma-separated fact tables to materialise.
+          required: false
+          default: 'orders-daily,order-lines-daily,customers-daily,returns-daily'
+        - key: ROLLUP_BUDGET_MS
+          description: >-
+            Wall-clock budget before checkpointing and exiting 0. The Connect job hard
+            timeout is 30 minutes, so this must leave margin.
+          required: false
+          default: '1200000'
+        - key: ROLLUP_LOCK_TTL_MS
+          description: >-
+            Lock TTL. MUST exceed the 30-minute job timeout so a crashed run's lock expires
+            rather than wedging the job forever.
+          required: false
+          default: '2700000'
+        - key: ROLLUP_PAGE_SIZE
+          description: Order page size for keyset pagination. Platform maximum is 500.
+          required: false
+          default: '500'
+        - key: RESTATEMENT_WINDOW_DAYS
+          description: >-
+            Trailing days re-derived on the nightly reconcile pass, to absorb refunds,
+            returns and cancellations that restate an earlier day's bucket.
+          required: false
+          default: '90'
+        - key: BACKFILL_DAYS
+          description: How far back an initial backfill reaches.
+          required: false
+          default: '400'
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          description: API client ID with view_orders, view_customers, manage_key_value_documents.
+          required: true
+        - key: CTP_CLIENT_SECRET
+          description: commercetools API client secret.
+          required: true
+        - key: CTP_SCOPE
+          description: Space-separated OAuth scopes.
+          required: true

@@ -1,0 +1,7 @@
+mutation UpsertCustomReport($container: String!, $key: String!, $value: Json!) {
+  createOrUpdateCustomObject(draft: { container: $container, key: $key, value: $value }) {
+    id
+    version
+    key
+  }
+}

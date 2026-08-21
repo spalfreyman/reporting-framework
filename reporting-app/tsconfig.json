@@ -1,0 +1,17 @@
+{
+  "extends": "@commercetools-frontend/application-config/tsconfig-mc-app.json",
+  "compilerOptions": {
+    "typeRoots": ["@types", "@types-extensions", "node_modules/@types"],
+    // Allow tsc to resolve dependencies of `@types` packages the way pnpm lays out node_modules.
+    "preserveSymlinks": false,
+    /**
+     * Required, not optional. Several @commercetools-frontend declaration files reference
+     * sibling packages by a pnpm-style relative path that an npm install does not reproduce,
+     * and application-shell types import the optional `@commercetools/nimbus` peer. Without
+     * this, `tsc --noEmit` fails on node_modules before it ever reaches our own code.
+     * The sibling Merchant Center apps on this machine set the same flag.
+     */
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}

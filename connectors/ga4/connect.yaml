@@ -1,0 +1,120 @@
+# Google Analytics 4 reporting data source — a SEPARATE, independently installable connector.
+#
+# Inert to the framework's own deploy (the root connect.yaml never names it). Ship it for
+# real with:  node scripts/split-connector.mjs ga4 ../reporting-source-ga4
+#
+# Two apps: a service that answers /query, and a nightly job that pre-warms the cache so
+# dashboards never spend the GA4 property's shared token budget during business hours.
+deployAs:
+  - name: ga4-source
+    applicationType: service
+    endpoint: /ga4-source
+    scripts:
+      postDeploy: npm install && npm run build && npm run connector:post-deploy
+      preUndeploy: npm install && npm run build && npm run connector:pre-undeploy
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          description: commercetools project key. The source registers itself here.
+          required: true
+        - key: CTP_REGION
+          description: Region of the commercetools project.
+          required: true
+          default: 'europe-west1.gcp'
+        - key: SOURCE_ID
+          description: Registry id, unique per install. Writes reporting.datasources/<SOURCE_ID>.
+          required: true
+          default: 'ga4'
+        - key: SOURCE_DISPLAY_NAME
+          description: Label shown in the Merchant Center data-source admin page.
+          required: false
+          default: 'Google Analytics 4'
+        - key: MODE
+          description: >-
+            'live' calls the GA4 Data API. 'demo' serves deterministic fixtures so the whole
+            framework — including cross-source conversion rate — is demonstrable with no
+            Google credentials.
+          required: true
+          default: 'demo'
+        - key: GA4_PROPERTY_ID
+          description: Numeric GA4 property id (required when MODE=live).
+          required: false
+        - key: GA4_TIMEZONE
+          description: >-
+            Reporting timezone of the GA4 property. MUST match the framework's ROLLUP_TIMEZONE
+            or cross-source day-grain joins are misaligned.
+          required: false
+          default: 'UTC'
+        - key: CACHE_TTL_SEALED_SECONDS
+          description: TTL for closed historical periods (immutable apart from GA4 late attribution).
+          required: false
+          default: '21600'
+        - key: CACHE_TTL_TODAY_SECONDS
+          description: TTL for results including the current day.
+          required: false
+          default: '900'
+        - key: GA4_TOKENS_PER_HOUR
+          description: Client-side token-bucket ceiling to stay inside the per-property quota.
+          required: false
+          default: '1000'
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          description: API client ID with manage_key_value_documents (self-registration + result cache).
+          required: true
+        - key: CTP_CLIENT_SECRET
+          description: commercetools API client secret.
+          required: true
+        - key: CTP_SCOPE
+          description: Space-separated OAuth scopes.
+          required: true
+        - key: REPORTING_SHARED_SECRET
+          description: >-
+            Bearer secret the reporting gateway presents. MUST equal the framework connector's
+            REPORTING_SHARED_SECRET. Verified with a timing-safe comparison.
+          required: true
+        - key: GA4_SERVICE_ACCOUNT_JSON
+          description: >-
+            Google service-account key JSON (single line) with Viewer on the GA4 property.
+            Required when MODE=live.
+          required: false
+
+  - name: ga4-prewarm-job
+    applicationType: job
+    endpoint: /ga4-prewarm-job
+    properties:
+      schedule: '40 3 * * *'
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          required: true
+          description: commercetools project key.
+        - key: CTP_REGION
+          required: true
+          default: 'europe-west1.gcp'
+          description: Region of the commercetools project.
+        - key: SOURCE_ID
+          required: true
+          default: 'ga4'
+          description: Must match the ga4-source SOURCE_ID.
+        - key: GA4_SOURCE_URL
+          required: false
+          description: >-
+            Base URL of the ga4-source service. If empty, the job reads it from the source's
+            registered descriptor (reporting.datasources/<SOURCE_ID>).
+        - key: PREWARM_LOOKBACK_DAYS
+          required: false
+          default: '90'
+          description: Historic window pre-fetched into cache before business hours.
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          required: true
+          description: API client ID with view_key_value_documents.
+        - key: CTP_CLIENT_SECRET
+          required: true
+          description: API client secret.
+        - key: CTP_SCOPE
+          required: true
+          description: Space-separated OAuth scopes.
+        - key: REPORTING_SHARED_SECRET
+          required: true
+          description: Bearer secret to call ga4-source. Must match the framework secret.

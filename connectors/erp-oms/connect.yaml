@@ -1,0 +1,104 @@
+# ERP / OMS reporting source — a SEPARATE, independently installable connector.
+# Split for real with:  node scripts/split-connector.mjs erp-oms ../reporting-source-erp-oms
+#
+# ERP APIs are slow and rate-limited, so this is service + nightly extract: the extract job
+# would pull into fact objects overnight; the service answers /query. Ships a fake ERP so the
+# operations and inventory reports are demonstrable with no ERP credentials.
+deployAs:
+  - name: erp-oms-source
+    applicationType: service
+    endpoint: /erp-oms-source
+    scripts:
+      postDeploy: npm install && npm run build && npm run connector:post-deploy
+      preUndeploy: npm install && npm run build && npm run connector:pre-undeploy
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          required: true
+          description: commercetools project key. The source registers itself here.
+        - key: CTP_REGION
+          required: true
+          default: 'europe-west1.gcp'
+          description: Region of the commercetools project.
+        - key: SOURCE_ID
+          required: true
+          default: 'erp-oms'
+          description: Registry id, unique per install.
+        - key: SOURCE_DISPLAY_NAME
+          required: false
+          default: 'ERP / OMS'
+          description: Label shown in the data-source admin page.
+        - key: MODE
+          required: true
+          default: 'demo'
+          description: >-
+            'live' calls a real ERP over REST. 'demo' serves a built-in fake ERP so the
+            operations and inventory reports render with no ERP credentials.
+        - key: ERP_BASE_URL
+          required: false
+          description: Base URL of the ERP REST API (MODE=live).
+        - key: ERP_AUTH_MODE
+          required: false
+          default: 'apiKey'
+          description: One of apiKey, basic, none.
+        - key: ERP_TIMEZONE
+          required: false
+          default: 'UTC'
+          description: Timezone the ERP reports its dates in. Must match ROLLUP_TIMEZONE.
+        - key: ERP_TIMEOUT_MS
+          required: false
+          default: '10000'
+          description: Per-request timeout to the ERP.
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          required: true
+          description: API client ID with manage_key_value_documents (self-registration).
+        - key: CTP_CLIENT_SECRET
+          required: true
+          description: API client secret.
+        - key: CTP_SCOPE
+          required: true
+          description: Space-separated OAuth scopes.
+        - key: REPORTING_SHARED_SECRET
+          required: true
+          description: Bearer secret the gateway presents. Must equal the framework secret.
+        - key: ERP_API_KEY
+          required: false
+          description: ERP API key (ERP_AUTH_MODE=apiKey, MODE=live).
+
+  - name: erp-oms-extract-job
+    applicationType: job
+    endpoint: /erp-oms-extract-job
+    properties:
+      schedule: '10 3 * * *'
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          required: true
+          description: commercetools project key.
+        - key: CTP_REGION
+          required: true
+          default: 'europe-west1.gcp'
+          description: Region of the commercetools project.
+        - key: SOURCE_ID
+          required: true
+          default: 'erp-oms'
+          description: Must match the erp-oms-source SOURCE_ID.
+        - key: MODE
+          required: true
+          default: 'demo'
+          description: Extract from the real ERP (live) or the fake ERP (demo).
+        - key: EXTRACT_LOOKBACK_DAYS
+          required: false
+          default: '90'
+          description: How far back the nightly extract reaches.
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          required: true
+          description: API client ID with manage_key_value_documents.
+        - key: CTP_CLIENT_SECRET
+          required: true
+          description: API client secret.
+        - key: CTP_SCOPE
+          required: true
+          description: Space-separated OAuth scopes.
