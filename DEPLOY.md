@@ -177,3 +177,30 @@ ct-native:
 
 Note on sp-demo: Product Search is not activated, so ct-native serves order metrics from the
 rollup fact store and degrades the live catalogue-facet path cleanly. MODE stays `live`.
+
+---
+
+## Re-running after a build fix (shared-code vendoring)
+
+The first preview build failed because Connect builds each app in an **isolated context**
+rooted at the app folder — the repo-root `shared/` is not reachable, so the `prebuild` copy
+step found nothing. Fixed by vendoring the shared contracts into each app at the release
+tag (main stays clean; `src/shared` is still generated/gitignored there). All four framework
+apps and ct-native now build locally with the exact `npm run build` the buildpack runs.
+
+The `v0.1.0` tag on `reporting-framework` was moved to the fixed commit `364a050`
+(ct-native's `v0.1.0` already pointed at a vendored commit). Connect clones the repo fresh on
+each pipeline run, so simply **re-run the preview** to pick up the fix:
+
+```bash
+commercetools connect connectorstaged preview --key reporting-framework \
+  --deployment-key reporting-framework-preview --region europe-west1.gcp \
+  --configuration ...   # same config as before
+```
+
+If a re-preview appears to rebuild the old code (stale tag resolution), cut an unambiguous
+new tag instead and point the staged connector at it:
+```bash
+git tag v0.1.1 && git push origin v0.1.1
+commercetools connect connectorstaged update --key reporting-framework --repository-tag v0.1.1
+```
