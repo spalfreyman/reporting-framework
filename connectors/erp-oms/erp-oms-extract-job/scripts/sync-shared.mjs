@@ -52,7 +52,24 @@ const findRepoRoot = (start) => {
 
 const REPO_ROOT = findRepoRoot(SCRIPT_DIR);
 if (!REPO_ROOT) {
-  console.error(`Could not find shared/src in any ancestor of ${SCRIPT_DIR}`);
+  /**
+   * In a commercetools Connect build each application is built in an isolated context
+   * rooted at its own folder — the repo-root `shared/src` is NOT in that context, so the
+   * ancestor walk finds nothing. If the shared tree has been vendored into the app
+   * (committed at the release tag; see the deploy runbook), there is nothing to copy: use
+   * it as-is. Only fail when there is neither a source tree to copy from nor a vendored
+   * copy to fall back on — a genuinely broken checkout.
+   */
+  const ownAppDir = path.dirname(SCRIPT_DIR);
+  if (fs.existsSync(path.join(ownAppDir, 'src', 'shared'))) {
+    console.log(
+      'sync:shared: no shared/src in the build context; using vendored src/shared as-is'
+    );
+    process.exit(0);
+  }
+  console.error(
+    `Could not find shared/src in any ancestor of ${SCRIPT_DIR}, and no vendored src/shared to fall back on`
+  );
   process.exit(1);
 }
 const SOURCE = path.join(REPO_ROOT, 'shared', 'src');
