@@ -1,6 +1,6 @@
 # Deploying the Reporting Framework to commercetools Connect
 
-Status: repos pushed and tagged `v0.1.0`; ready for a **preview** deployment.
+Status: private connector published; current release tag `v0.1.3` (installed to `sp-demo`).
 
 - Framework connector: https://github.com/spalfreyman/reporting-framework (private)
 - ct-native source connector: https://github.com/spalfreyman/reporting-source-ct-native (private)
@@ -204,3 +204,36 @@ new tag instead and point the staged connector at it:
 git tag v0.1.1 && git push origin v0.1.1
 commercetools connect connectorstaged update --key reporting-framework --repository-tag v0.1.1
 ```
+
+## A Connect `job` is a long-running HTTP server, not a run-to-exit script
+
+`v0.1.3` fixes a class of bug that fails the deploy at
+"Health check for application reporting-rollup-job failed" **even when the job's own logic
+runs and exits 0**. A Connect `job` is not a CLI invoked once: the platform's cron scheduler
+triggers it by **POSTing to its `endpoint`**, the container must stay up and pass a liveness
+probe, and it must reply `200`
+([docs](https://docs.commercetools.com/connect/test-applications-locally#test-a-job-application)).
+`service`, `event` and `job` all expose an endpoint and must listen on `PORT`.
+
+So the rollup-job now boots an express server (`src/index.ts` → `createApp()` in `src/app.ts`)
+exactly like the event app; `GET /rollup-job/status` is the liveness route and `POST
+/rollup-job` runs one pass via `runJob()` (in `src/job.ts`) and returns `200`. The old
+`runJob(); process.exit(0)` entrypoint never opened a port, so nothing answered the probe.
+
+The same shape is required for the two other job apps that ship in `connectors/` —
+`ga4-prewarm-job` and `erp-oms-extract-job` — before those connectors are deployed.
+
+### Publishing a new release (what worked in the MC UI)
+
+The whole loop is doable in the Merchant Center without a CLI:
+1. Push the code to `main`, then cut a **new tag** (`git tag v0.1.3 && git push origin v0.1.3`).
+   The tag must **vendor `shared/` into each app** (`node scripts/sync-shared.mjs --all`, then
+   `git add -f <app>/src/shared <app>/src/shared-node`) because Connect builds each app in an
+   isolated context rooted at the app folder — the repo-root `shared/` is not reachable. Keep
+   the vendored copies **off `main`** (they are gitignored); commit them only on the tag.
+2. Organization settings → Connect → **Organization connectors** → *Manage connectors* →
+   open the connector → **Connector Details → Edit** → re-select the Git provider → pick the
+   new **Tag** → **Re-publish**. Status goes `Publishing` → `Published`.
+3. A **Redeploy** of an existing installation reuses the version it was created with, so it
+   does **not** pick up the new tag — do a **fresh Install** of the now-current version
+   (re-enter config + secrets), then uninstall the old failed deployment.
