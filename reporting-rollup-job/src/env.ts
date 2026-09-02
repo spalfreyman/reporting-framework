@@ -25,6 +25,12 @@ const schema = z.object({
   /** Top-N SKUs per store per day kept in order-lines-daily; the tail folds to __other__. */
   ITEM_TOP_N: z.coerce.number().int().positive().default(500),
 
+  /**
+   * Port the job's HTTP server listens on. A Connect `job` is a long-running server the
+   * scheduler POSTs to on its cron; Connect injects PORT at runtime. The default is only for
+   * local `dev`/`start`.
+   */
+  PORT: z.coerce.number().int().positive().default(8083),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
