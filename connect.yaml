@@ -170,9 +170,12 @@ deployAs:
           required: false
           default: '2700000'
         - key: ROLLUP_PAGE_SIZE
-          description: Order page size for keyset pagination. Platform maximum is 500.
+          description: >-
+            Order page size for keyset pagination. Kept at 100 because the order projection
+            query costs ~49 GraphQL complexity points per order, and commercetools rejects a
+            query over 20000 (500 → ~24550, which fails). Do not raise above ~350.
           required: false
-          default: '500'
+          default: '100'
         - key: RESTATEMENT_WINDOW_DAYS
           description: >-
             Trailing days re-derived on the nightly reconcile pass, to absorb refunds,
