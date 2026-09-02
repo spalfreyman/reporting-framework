@@ -21,7 +21,13 @@ const main = async (): Promise<void> => {
 
   const existing = await port.get<{ url?: string }>(CO.config, CO.keys.gateway);
   const desired = {
-    url: config.CONNECT_SERVICE_URL.replace(/\/$/, ''),
+    // Publish the ORIGIN, not CONNECT_SERVICE_URL. Connect's injected service URL already
+    // includes this app's `/gateway` endpoint suffix (e.g. https://service-xxx.../gateway),
+    // but the Merchant Center app builds every request as `${gatewayUrl}/gateway/reports...`
+    // — it adds `/gateway` itself, because the gateway's Express router is mounted at
+    // `/gateway`. Publishing the full service URL would double the segment
+    // (.../gateway/gateway/reports → 404). The origin is exactly `sessionAudience`.
+    url: config.sessionAudience,
     audience: config.sessionAudience,
     deployedAt: new Date().toISOString(),
   };
