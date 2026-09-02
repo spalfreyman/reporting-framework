@@ -71,7 +71,11 @@ const config = {
      * `reporting.config/gateway` during postDeploy and the app discovers it at boot, which
      * is what makes the connector a single-pass deploy.
      */
-    reportingGatewayUrl: '${env:REPORTING_GATEWAY_URL}',
+    // Optional override, normally unset. A bare '${env:REPORTING_GATEWAY_URL}' placeholder
+    // makes mc-scripts' compile-html throw at runtime when the var is absent, so read it
+    // from process.env with an empty-string fallback instead — the app then discovers the
+    // gateway URL from Custom Object reporting.config/gateway at boot.
+    reportingGatewayUrl: process.env.REPORTING_GATEWAY_URL ?? '',
     forwardToAudiencePolicy: 'forward-url-origin',
   },
 

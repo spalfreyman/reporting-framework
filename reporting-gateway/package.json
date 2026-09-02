@@ -10,7 +10,6 @@
     "sync:shared": "node scripts/sync-shared.mjs",
     "prebuild": "npm run sync:shared",
     "build": "tsc",
-    "prestart": "npm run build",
     "start": "node dist/src/index.js",
     "predev": "npm run sync:shared",
     "dev": "tsx watch src/index.ts",
