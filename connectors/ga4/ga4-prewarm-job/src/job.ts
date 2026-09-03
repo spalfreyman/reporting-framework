@@ -52,8 +52,15 @@ export const runPrewarm = async (): Promise<{
 
   for (const [i, target] of targets.entries()) {
     const query = toSourceQuery(config.CTP_PROJECT_KEY, config.SOURCE_ID, target, `prewarm-${today}-${i}`);
+    // The registered descriptor's endpointUrl already includes the app's mount path
+    // (e.g. `.../ga4-source`), so the query endpoint is `<endpointUrl>/query`. Only append the
+    // `/<sourceId>-source` segment when it is NOT already present — which also keeps an
+    // origin-only GA4_SOURCE_URL override working.
+    const queryUrl = sourceUrl.endsWith(`/${config.SOURCE_ID}-source`)
+      ? `${sourceUrl}/query`
+      : `${sourceUrl}/${config.SOURCE_ID}-source/query`;
     try {
-      const response = await fetch(`${sourceUrl}/${config.SOURCE_ID}-source/query`, {
+      const response = await fetch(queryUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${config.REPORTING_SHARED_SECRET}` },
         body: JSON.stringify(query),
