@@ -10,6 +10,7 @@ const schema = z.object({
   GA4_SOURCE_URL: z.string().url().optional(),
   PREWARM_LOOKBACK_DAYS: z.coerce.number().int().positive().default(90),
   REPORTING_SHARED_SECRET: z.string().min(16),
+  PORT: z.coerce.number().int().positive().default(8080),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 export type Config = z.infer<typeof schema> & { authUrl: string; apiUrl: string };
