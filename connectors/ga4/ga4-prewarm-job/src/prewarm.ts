@@ -73,6 +73,8 @@ export const toSourceQuery = (
   filters: [],
   scope: { unrestricted: true },
   orderBy: [],
-  limit: 100000,
+  // The DSP query schema caps `limit` at 50000; day-grain aggregates return far fewer rows,
+  // so this is only a ceiling. Requesting 100000 made every warm query 400 ("Malformed query").
+  limit: 50000,
   budgetMs: 60000,
 });
