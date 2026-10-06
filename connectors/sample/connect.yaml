@@ -1,0 +1,95 @@
+# Sample Data Source — a reporting data-source connector, independently installable.
+#
+# Inert to the framework's own deploy (the root connect.yaml never names it). Ship it for
+# real with:  node scripts/split-connector.mjs sample ../reporting-source-sample
+#
+# Two apps: a `service` that answers /query, and a `job` that pre-warms / extracts on a
+# schedule. Both are long-running HTTP servers that must listen on PORT and reply 200.
+deployAs:
+  - name: sample-source
+    applicationType: service
+    endpoint: /sample-source
+    scripts:
+      postDeploy: npm install && npm run build && npm run connector:post-deploy
+      preUndeploy: npm install && npm run build && npm run connector:pre-undeploy
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          description: commercetools project key. The source registers itself here.
+          required: true
+        - key: CTP_REGION
+          description: Region of the commercetools project.
+          required: true
+          default: 'europe-west1.gcp'
+        - key: SOURCE_ID
+          description: Registry id, unique per install. Writes reporting.datasources/<SOURCE_ID>.
+          required: true
+          default: 'sample'
+        - key: SOURCE_DISPLAY_NAME
+          description: Label shown in the Merchant Center data-source admin page.
+          required: false
+          default: 'Sample Data Source'
+        - key: SOURCE_TIMEZONE
+          description: IANA timezone the source cuts day buckets in. Must match the framework's ROLLUP_TIMEZONE for day-grain joins.
+          required: false
+          default: 'UTC'
+        - key: DATA_SEED
+          description: Deterministic seed for the synthetic figures.
+          required: false
+          default: '42'
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          description: API client ID with manage_key_value_documents (self-registration).
+          required: true
+        - key: CTP_CLIENT_SECRET
+          description: commercetools API client secret.
+          required: true
+        - key: CTP_SCOPE
+          description: Space-separated OAuth scopes.
+          required: true
+        - key: REPORTING_SHARED_SECRET
+          description: >-
+            Bearer secret the reporting gateway presents. MUST equal the framework connector's
+            REPORTING_SHARED_SECRET. Verified with a timing-safe comparison.
+          required: true
+
+  - name: sample-prewarm-job
+    applicationType: job
+    endpoint: /sample-prewarm-job
+    properties:
+      schedule: '40 3 * * *'
+    configuration:
+      standardConfiguration:
+        - key: CTP_PROJECT_KEY
+          required: true
+          description: commercetools project key.
+        - key: CTP_REGION
+          required: true
+          default: 'europe-west1.gcp'
+          description: Region of the commercetools project.
+        - key: SOURCE_ID
+          required: true
+          default: 'sample'
+          description: Must match the sample-source SOURCE_ID.
+        - key: SOURCE_URL
+          required: false
+          description: >-
+            Base URL of the source service. If empty, the job reads it from the source's
+            registered descriptor (reporting.datasources/<SOURCE_ID>).
+        - key: PREWARM_LOOKBACK_DAYS
+          required: false
+          default: '90'
+          description: Historic window pre-fetched before business hours.
+      securedConfiguration:
+        - key: CTP_CLIENT_ID
+          required: true
+          description: API client ID with view_key_value_documents.
+        - key: CTP_CLIENT_SECRET
+          required: true
+          description: API client secret.
+        - key: CTP_SCOPE
+          required: true
+          description: Space-separated OAuth scopes.
+        - key: REPORTING_SHARED_SECRET
+          required: true
+          description: Bearer secret to call the source. Must match the framework secret.
