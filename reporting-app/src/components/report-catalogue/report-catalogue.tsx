@@ -194,7 +194,7 @@ const ReportCatalogue = () => {
                         >
                           {available ? (
                             <RouterLink
-                              to={`${match.url}/../reports/${report.id}`}
+                              to={`${match.url.replace(/\/catalogue\/?$/, '')}/reports/${report.id}`}
                             >
                               <Text.Subheadline as="h4" tone="primary">
                                 {titleOf(report)}
