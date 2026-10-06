@@ -59,9 +59,35 @@ const MEASURE_BY_METRIC: Record<string, string> = {
   'shipments.onTime': 'shipmentsOnTime',
 };
 
-export const cubesFor = (metrics: string[]): string[] => [
-  ...new Set(metrics.map((m) => CUBE_BY_METRIC[m]).filter(Boolean)),
-];
+/**
+ * Metrics that are ALSO materialised at item grain, and which cube serves each split.
+ *
+ * The order cube (orders-daily) has no product/category cells, so when a query groups by
+ * product or category these metrics must be read from the item cubes instead: order-lines-daily
+ * (per SKU, top-N) for product, order-categories-daily (complete) for category. `units.sold`
+ * lives only in the item cubes anyway; `revenue.net` falls back to orders-daily when the query
+ * is NOT split by product/category (that is the order-grain net, which is the report total).
+ */
+const ITEM_METRIC_CUBE: Record<string, { product: string; category: string }> = {
+  'revenue.net@orderdate': { product: 'order-lines-daily', category: 'order-categories-daily' },
+  'units.sold@orderdate': { product: 'order-lines-daily', category: 'order-categories-daily' },
+};
+
+export const cubesFor = (metrics: string[], groupBy: string[] = []): string[] => {
+  const byCategory = groupBy.includes('category');
+  const byProduct = groupBy.includes('product');
+  return [
+    ...new Set(
+      metrics
+        .map((m) => {
+          const item = ITEM_METRIC_CUBE[m];
+          if (item && (byCategory || byProduct)) return byCategory ? item.category : item.product;
+          return CUBE_BY_METRIC[m];
+        })
+        .filter(Boolean)
+    ),
+  ];
+};
 
 export interface RollupReadResult {
   columns: ColumnMeta[];
@@ -112,11 +138,12 @@ export const readRollup = async (
   query: SourceQuery
 ): Promise<RollupReadResult> => {
   const days = query.timeRange ? eachDay(query.timeRange) : [];
-  const cubes = cubesFor(query.metrics);
   const matches = asFilterPredicate(query);
 
   const groupBy = query.dimensions.filter((d) => d !== 'date');
   const includeDate = query.dimensions.includes('date') || query.grain !== null;
+  // Cube choice depends on the grouping: an item-grain split reads the item cubes.
+  const cubes = cubesFor(query.metrics, groupBy);
 
   // Accumulate into a map keyed by (day, ...dimension values).
   const accumulator = new Map<string, { key: Record<string, string>; day: string; m: Record<string, number> }>();

@@ -2,7 +2,8 @@ import { readConfiguration } from './env.js';
 import { decodeDelivery } from './decode.js';
 import { fetchOrder } from './client.js';
 import { orderFactContainerFor } from './shared/rollup/keying.js';
-import { toOrderFact } from './shared/rollup/order-mapping.js';
+import { applyLineCategories, toOrderFact } from './shared/rollup/order-mapping.js';
+import { getCategoryResolver } from './shared-node/category-resolver.js';
 import { ConcurrentModificationError, type CustomObjectPort } from './shared/ct/ports.js';
 import type { OrderFact } from './shared/rollup/keying.js';
 import type { ByProjectKeyRequestBuilder } from '@commercetools/platform-sdk';
@@ -38,6 +39,11 @@ export const processDelivery = async (
     deps.log.info('order no longer exists; acking', { orderId: decoded.orderId });
     return { status: 204, outcome: 'order-deleted' };
   }
+
+  // Resolve each line's product category (orders carry only productId) so the item-grain
+  // cubes can key on it. The resolver is memoised, so this is a map lookup after the first call.
+  const resolver = await getCategoryResolver(deps.apiRoot);
+  applyLineCategories(order, resolver.categoryOf);
 
   const fact = toOrderFact(order, config.ROLLUP_TIMEZONE);
   const container = orderFactContainerFor(fact.businessDate);

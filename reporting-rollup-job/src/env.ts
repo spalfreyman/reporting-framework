@@ -8,7 +8,7 @@ const schema = z.object({
   CTP_SCOPE: z.string().min(1),
 
   ROLLUP_TIMEZONE: z.string().default('UTC'),
-  ROLLUP_CUBES: z.string().default('orders-daily,order-lines-daily'),
+  ROLLUP_CUBES: z.string().default('orders-daily,order-lines-daily,order-categories-daily'),
   /** Wall-clock budget before checkpointing and exiting 0. Job hard timeout is 30 min. */
   ROLLUP_BUDGET_MS: z.coerce.number().int().positive().default(1_200_000),
   /** Lock TTL. MUST exceed the 30-min timeout so a crashed run's lock expires. */

@@ -47,6 +47,12 @@ export interface OrderProjection {
     distributionChannel?: { key?: string | null } | null;
     price?: { value?: { centAmount: number } | null } | null;
     totalPrice?: { centAmount: number } | null;
+    /**
+     * The product's reporting category key. An order line does not carry this — it is
+     * resolved from the product (productId → category) and attached by applyLineCategories()
+     * before the fact is built, so the item-grain cubes can key on it.
+     */
+    category?: string | null;
   }> | null;
 }
 
@@ -140,6 +146,23 @@ export const businessDateOf = (order: OrderProjection, timezone: string): string
 };
 
 /**
+ * Attaches each line's product category (a key) to the projection, in place.
+ *
+ * An order line carries only `productId`, not the product's category, so category is resolved
+ * from the product and applied here before the fact is built. `categoryOf` is a pure lookup
+ * supplied by the caller (see shared-node/category-resolver), which keeps this function — and
+ * toOrderFact — free of any commercetools I/O and therefore trivially testable.
+ */
+export const applyLineCategories = (
+  order: OrderProjection,
+  categoryOf: (productId?: string | null) => string
+): void => {
+  for (const line of order.lineItems ?? []) {
+    line.category = categoryOf(line.productId);
+  }
+};
+
+/**
  * The per-order fact written by the event handler.
  *
  * Recomputed wholesale from the order every time rather than incremented, so an
@@ -184,7 +207,9 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
     },
     items: (order.lineItems ?? []).map((line) => ({
       sku: line.variant?.sku ?? line.productId ?? NONE,
-      category: NONE,
+      // Resolved from the product by applyLineCategories() before this runs; NONE if the
+      // product has no category or resolution was skipped.
+      category: line.category ?? NONE,
       units: line.quantity ?? 0,
       revenueNet: centAmount(line.totalPrice),
       returnsUnits: 0,
@@ -235,6 +260,32 @@ export const foldOrderLinesDaily = (facts: OrderFact[]): FactCell[] => {
     for (const item of fact.items ?? []) {
       const k = { currency: fact.dims.currency, store: fact.dims.store, product: item.sku };
       const mapKey = Object.values(k).join('');
+      const cell: FactCell = byKey.get(mapKey) ?? { k, m: {} };
+      cell.m.units = (cell.m.units ?? 0) + item.units;
+      cell.m.revenueNet = (cell.m.revenueNet ?? 0) + item.revenueNet;
+      cell.m.returnsUnits = (cell.m.returnsUnits ?? 0) + item.returnsUnits;
+      byKey.set(mapKey, cell);
+    }
+  }
+
+  return [...byKey.values()];
+};
+
+/**
+ * Folds order-facts into the `order-categories-daily` cube: units and net revenue per category.
+ *
+ * A SEPARATE cube from order-lines-daily on purpose. order-lines-daily is capped at top-N SKUs
+ * per store, so its `__other__` residual would strip category attribution off the long tail —
+ * a category total read from it would undercount categories made of many small sellers.
+ * Categories are low-cardinality, so this cube needs no top-N and stays complete and exact.
+ */
+export const foldOrderCategoriesDaily = (facts: OrderFact[]): FactCell[] => {
+  const byKey = new Map<string, FactCell>();
+
+  for (const fact of facts) {
+    for (const item of fact.items ?? []) {
+      const k = { currency: fact.dims.currency, store: fact.dims.store, category: item.category };
+      const mapKey = Object.values(k).join('');
       const cell: FactCell = byKey.get(mapKey) ?? { k, m: {} };
       cell.m.units = (cell.m.units ?? 0) + item.units;
       cell.m.revenueNet = (cell.m.revenueNet ?? 0) + item.revenueNet;

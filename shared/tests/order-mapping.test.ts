@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { businessDateOf, toOrderFact, foldOrdersDaily } from '../src/rollup/order-mapping.js';
+import {
+  applyLineCategories,
+  businessDateOf,
+  foldOrderCategoriesDaily,
+  foldOrdersDaily,
+  toOrderFact,
+} from '../src/rollup/order-mapping.js';
 import type { OrderProjection } from '../src/rollup/order-mapping.js';
 
 /**
@@ -44,5 +50,37 @@ describe('fold keeps currencies separate', () => {
     ];
     const cells = foldOrdersDaily(facts);
     expect(cells.map((c) => c.k.currency).sort()).toEqual(['EUR', 'GBP']);
+  });
+});
+
+describe('item-grain category rollup', () => {
+  const catBase: OrderProjection = {
+    ...base,
+    lineItems: [
+      { quantity: 2, productId: 'p-boots', variant: { sku: 'SKU-BOOTS' }, totalPrice: { centAmount: 6000 } },
+      { quantity: 1, productId: 'p-coat', variant: { sku: 'SKU-COAT' }, totalPrice: { centAmount: 9000 } },
+    ],
+  };
+  const resolve = (productId?: string | null) =>
+    productId === 'p-boots' ? 'footwear' : productId === 'p-coat' ? 'outerwear' : '_none';
+
+  it('applyLineCategories tags each line, which toOrderFact carries onto the item', () => {
+    const order = structuredClone(catBase);
+    applyLineCategories(order, resolve);
+    const fact = toOrderFact(order, 'UTC');
+    expect(fact.items?.map((i) => i.category).sort()).toEqual(['footwear', 'outerwear']);
+  });
+
+  it('folds net revenue and units per category, keeping every category (no top-N)', () => {
+    const a = structuredClone(catBase);
+    applyLineCategories(a, resolve);
+    const b = structuredClone({ ...catBase, id: 'o2' });
+    applyLineCategories(b, resolve);
+    const cells = foldOrderCategoriesDaily([toOrderFact(a, 'UTC'), toOrderFact(b, 'UTC')]);
+    const byCat = Object.fromEntries(cells.map((c) => [c.k.category, c.m]));
+    expect(byCat.footwear.revenueNet).toBe(12000); // 6000 x 2 orders
+    expect(byCat.footwear.units).toBe(4); // 2 units x 2 orders
+    expect(byCat.outerwear.revenueNet).toBe(18000);
+    expect(Object.keys(byCat).sort()).toEqual(['footwear', 'outerwear']);
   });
 });

@@ -84,7 +84,11 @@ export const buildDescriptor = (options: DescriptorOptions = {}): DataSourceDesc
         // ── Order grain, from the rollup fact store ──────────────────────────
         materialized('orders.count@orderdate', ORDER_DIMENSIONS),
         materialized('revenue.gross@orderdate', ORDER_DIMENSIONS),
-        materialized('revenue.net@orderdate', ORDER_DIMENSIONS),
+        // Net revenue is also served at item grain: by product from order-lines-daily, by
+        // category from order-categories-daily. (Gross/discount/tax are order-level only, so
+        // they stay order-grain.) Item-grain net is line revenue, which need not reconcile to
+        // the penny with order-grain net — order-level discounts/shipping live on the order.
+        materialized('revenue.net@orderdate', [...ORDER_DIMENSIONS, 'product', 'category']),
         materialized('revenue.net@cashdate', ORDER_DIMENSIONS),
         materialized('discount.value@orderdate', ORDER_DIMENSIONS),
         materialized('shipping.revenue@orderdate', ORDER_DIMENSIONS),

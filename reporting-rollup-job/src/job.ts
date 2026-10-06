@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { readConfiguration } from './env.js';
 import { createLogger } from './logger.js';
-import { getCustomObjectPort, getOrderScanPort } from './client.js';
+import { getApiRoot, getCustomObjectPort, getOrderScanPort } from './client.js';
+import { getCategoryResolver } from './shared-node/category-resolver.js';
 import { foldDay } from './fold.js';
 import {
   createBudget,
@@ -12,7 +13,7 @@ import {
 } from './shared/ct/index.js';
 import { CO } from './shared/schema/descriptor.js';
 import { orderFactContainerFor } from './shared/rollup/keying.js';
-import { toOrderFact, type OrderProjection } from './shared/rollup/order-mapping.js';
+import { applyLineCategories, toOrderFact, type OrderProjection } from './shared/rollup/order-mapping.js';
 import { ConcurrentModificationError } from './shared/ct/ports.js';
 import type { OrderFact } from './shared/rollup/keying.js';
 import type { CustomObjectPort } from './shared/ct/ports.js';
@@ -65,6 +66,8 @@ export const runJob = async (deps?: {
   port?: CustomObjectPort;
   scanner?: ReturnType<typeof getOrderScanPort>;
   now?: () => Date;
+  /** Product→category key lookup; defaults to the live resolver. Injectable for tests. */
+  categoryOf?: (productId?: string | null) => string;
 }): Promise<{ skipped: boolean; ordersProcessed: number; daysFolded: number }> => {
   const config = readConfiguration();
   const now = deps?.now ?? (() => new Date());
@@ -89,6 +92,11 @@ export const runJob = async (deps?: {
         epoch: restatementEpoch,
         updatedAt: now().toISOString(),
       };
+
+      // Resolve product→category once for the whole run (memoised), so each scanned order's
+      // lines can be tagged with their category before the fact is built.
+      const categoryOf =
+        deps?.categoryOf ?? (await getCategoryResolver(getApiRoot())).categoryOf;
 
       const until = safeUpperBound(now(), config.ROLLUP_SAFE_LAG_SECONDS);
       const dirtyDays = new Set<string>();
@@ -118,7 +126,9 @@ export const runJob = async (deps?: {
         }
 
         for (const scanned of page.results) {
-          const fact = toOrderFact(scanned as unknown as OrderProjection, config.ROLLUP_TIMEZONE);
+          const projection = scanned as unknown as OrderProjection;
+          applyLineCategories(projection, categoryOf);
+          const fact = toOrderFact(projection, config.ROLLUP_TIMEZONE);
           await writeOrderFact(port, fact);
           dirtyDays.add(fact.businessDate);
           ordersProcessed += 1;

@@ -156,7 +156,7 @@ deployAs:
         - key: ROLLUP_CUBES
           description: Comma-separated fact tables to materialise.
           required: false
-          default: 'orders-daily,order-lines-daily,customers-daily,returns-daily'
+          default: 'orders-daily,order-lines-daily,order-categories-daily,customers-daily,returns-daily'
         - key: ROLLUP_BUDGET_MS
           description: >-
             Wall-clock budget before checkpointing and exiting 0. The Connect job hard
