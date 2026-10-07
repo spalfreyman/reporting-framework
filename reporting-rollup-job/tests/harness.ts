@@ -130,6 +130,11 @@ const syncMatchers = (actual: unknown, negated: boolean) => {
         typeof actual === 'string' && (typeof re === 'string' ? actual.includes(re) : re.test(actual)),
         `expected ${fmt(actual)} to match ${String(re)}`
       ),
+    toHaveLength: (n: number) =>
+      ok(
+        actual != null && (actual as { length?: number }).length === n,
+        `expected ${fmt(actual)} to have length ${n}`
+      ),
     toBeNull: () => ok(actual === null, `expected ${fmt(actual)} to be null`),
     toBeUndefined: () => ok(actual === undefined, `expected ${fmt(actual)} to be undefined`),
     toBeDefined: () => ok(actual !== undefined, `expected ${fmt(actual)} to be defined`),
@@ -206,11 +211,38 @@ export const expect = Object.assign(
   }
 );
 
-// ── supertest-style HTTP shim over Hono's built-in `app.request()` ──────────────────
-// Replaces `supertest`, whose own tree is clean but which pulls the app's HTTP framework
-// into tests. Hono dispatches a Request without opening a socket, so no server is needed.
+// ── supertest-style HTTP shim ───────────────────────────────────────────────────────
+// Replaces `supertest`, which pulls the app's HTTP framework into tests. Works with either a
+// Hono app (dispatched in-process via `app.request()`, no socket) or a Node `http.Server`
+// (booted once on an ephemeral port, then `fetch`ed). The server is `unref`'d so a listening
+// instance never keeps the test runner's event loop alive.
 
 type HonoLike = { request: (input: string, init?: RequestInit) => Promise<Response> };
+type NodeServerLike = {
+  listen: (port: number, cb?: () => void) => unknown;
+  address: () => { port: number } | string | null;
+  unref?: () => unknown;
+};
+type AppLike = HonoLike | NodeServerLike;
+
+const isHono = (app: AppLike): app is HonoLike =>
+  typeof (app as HonoLike).request === 'function';
+
+const serverPorts = new WeakMap<object, Promise<number>>();
+const ensureListening = (server: NodeServerLike): Promise<number> => {
+  let pending = serverPorts.get(server);
+  if (!pending) {
+    pending = new Promise<number>((resolve) => {
+      server.listen(0, () => {
+        const addr = server.address();
+        server.unref?.();
+        resolve(typeof addr === 'object' && addr ? addr.port : 0);
+      });
+    });
+    serverPorts.set(server, pending);
+  }
+  return pending;
+};
 
 interface TestResponse {
   status: number;
@@ -222,13 +254,15 @@ class RequestBuilder implements PromiseLike<TestResponse> {
   private headers: Record<string, string> = {};
   private payload: unknown;
   constructor(
-    private readonly app: HonoLike,
+    private readonly app: AppLike,
     private readonly method: string,
     private readonly path: string
   ) {}
 
-  set(headers: Record<string, string>): this {
-    Object.assign(this.headers, headers);
+  // Accepts both supertest forms: `.set({ a: '1' })` and `.set('a', '1')`.
+  set(keyOrHeaders: string | Record<string, string>, value?: string): this {
+    if (typeof keyOrHeaders === 'string') this.headers[keyOrHeaders] = value ?? '';
+    else Object.assign(this.headers, keyOrHeaders);
     return this;
   }
 
@@ -238,12 +272,19 @@ class RequestBuilder implements PromiseLike<TestResponse> {
     return this;
   }
 
-  private async exec(): Promise<TestResponse> {
+  private buildInit(): RequestInit {
     const init: RequestInit = { method: this.method, headers: this.headers };
     if (this.payload !== undefined) {
       init.body = typeof this.payload === 'string' ? this.payload : JSON.stringify(this.payload);
     }
-    const res = await this.app.request(this.path, init);
+    return init;
+  }
+
+  private async exec(): Promise<TestResponse> {
+    const res = isHono(this.app)
+      ? await this.app.request(this.path, this.buildInit())
+      : await fetch(`http://127.0.0.1:${await ensureListening(this.app)}${this.path}`, this.buildInit());
+
     const text = await res.text();
     let body: Record<string, unknown> = {};
     if (text) {
@@ -268,7 +309,7 @@ class RequestBuilder implements PromiseLike<TestResponse> {
   }
 }
 
-export const request = (app: HonoLike) => ({
+export const request = (app: AppLike) => ({
   get: (path: string) => new RequestBuilder(app, 'GET', path),
   post: (path: string) => new RequestBuilder(app, 'POST', path),
   put: (path: string) => new RequestBuilder(app, 'PUT', path),

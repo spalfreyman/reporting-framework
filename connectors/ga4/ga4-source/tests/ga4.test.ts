@@ -1,5 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import { beforeAll, beforeEach, describe, expect, it , request } from './harness.js';
 import type { Express } from 'express';
 import { dataSourceDescriptorSchema } from '../src/shared/schema/descriptor.js';
 import { TokenBucket } from '../src/quota.js';

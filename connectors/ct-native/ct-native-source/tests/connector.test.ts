@@ -1,5 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import { beforeAll, describe, expect, it , request } from './harness.js';
 import type { Express } from 'express';
 import { dataSourceDescriptorSchema } from '../src/shared/schema/descriptor.js';
 import { bearerMatches } from '../src/shared/dsp/server.js';

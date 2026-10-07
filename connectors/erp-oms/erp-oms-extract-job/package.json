@@ -11,7 +11,7 @@
     "build": "tsc",
     "start": "node dist/src/index.js",
     "pretest": "npm run sync:shared",
-    "test": "tsc --noEmit && vitest run"
+    "test": "tsc --noEmit && node --import tsx --test \"tests/*.test.ts\""
   },
   "dependencies": {
     "@commercetools/platform-sdk": "^9.4.0",
@@ -21,13 +21,9 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
-    "typescript": "5.9.2",
-    "vitest": "^3.2.5"
+    "typescript": "5.9.2"
   },
   "engines": {
     "node": ">=22 <23"
-  },
-  "overrides": {
-    "vite": "^6.4.3"
   }
 }

@@ -1,5 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import request from 'supertest';
+import { beforeAll, describe, expect, it , request } from './harness.js';
 import type { Express } from 'express';
 import { compileQuery } from '../src/compile-query.js';
 import { TEMPLATES } from '../src/sql/manifest.js';

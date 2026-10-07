@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from './harness.js';
 import { planPrewarm, toSourceQuery } from '../src/prewarm.js';
 
 describe('prewarm planning', () => {

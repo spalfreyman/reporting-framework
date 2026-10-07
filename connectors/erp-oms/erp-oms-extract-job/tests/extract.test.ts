@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from './harness.js';
 import { planSlices, EXTRACT_CONTAINER } from '../src/extract.js';
 
 describe('erp extract planning', () => {

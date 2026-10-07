@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach } from './harness.js';
 import { buildDescriptor } from '../src/descriptor.js';
 import { isProductSearchUnavailable } from '../src/ct/live-facets.js';
 import { resetConfiguration } from '../src/env.js';
