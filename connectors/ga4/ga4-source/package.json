@@ -20,8 +20,8 @@
   "dependencies": {
     "@commercetools/platform-sdk": "^9.4.0",
     "@commercetools/ts-client": "^5.0.2",
-    "@google-analytics/data": "^5.2.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "jose": "^5.10.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
