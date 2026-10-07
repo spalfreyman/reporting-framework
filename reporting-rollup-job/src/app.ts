@@ -1,4 +1,4 @@
-import express, { type Express, type Request, type Response } from 'express';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import { readConfiguration } from './env.js';
 import { createLogger } from './logger.js';
 import { runJob, JOB_NAME } from './job.js';
@@ -15,32 +15,44 @@ import { runJob, JOB_NAME } from './job.js';
  * `skipped`). We reply 200 in every non-crash case so a single slow run does not wedge the
  * scheduler into an endless redelivery loop; genuine startup/config failures still surface as
  * a 500.
+ *
+ * Implemented on Node's built-in `http` server rather than a framework: the app has exactly
+ * two routes and no request body to parse, so a dependency here would be pure cost — and it
+ * keeps the deployed tree free of the transitive packages Connect's SCA flags.
  */
-export const createApp = (): Express => {
+
+const sendJson = (res: ServerResponse, status: number, body: unknown): void => {
+  // `x-powered-by` is deliberately never set — nothing should advertise the implementation.
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(body));
+};
+
+export const createApp = (): Server => {
   const config = readConfiguration();
   const log = createLogger(config.LOG_LEVEL, { app: JOB_NAME });
-
-  const app = express();
-  app.disable('x-powered-by');
-  app.use(express.json({ limit: '1mb' }));
-
   const base = '/rollup-job';
 
-  app.get(`${base}/status`, (_req: Request, res: Response) => {
-    res.status(200).json({ status: 'ok', app: JOB_NAME });
-  });
+  return createServer(async (req, res) => {
+    const path = (req.url ?? '/').split('?', 1)[0];
 
-  app.post(base, async (_req: Request, res: Response) => {
-    try {
-      const result = await runJob();
-      res.status(200).json({ ...result, app: JOB_NAME });
-    } catch (error) {
-      log.error('rollup job failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      res.status(500).json({ error: 'INTERNAL' });
+    if (req.method === 'GET' && path === `${base}/status`) {
+      sendJson(res, 200, { status: 'ok', app: JOB_NAME });
+      return;
     }
-  });
 
-  return app;
+    if (req.method === 'POST' && path === base) {
+      try {
+        const result = await runJob();
+        sendJson(res, 200, { ...result, app: JOB_NAME });
+      } catch (error) {
+        log.error('rollup job failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        sendJson(res, 500, { error: 'INTERNAL' });
+      }
+      return;
+    }
+
+    sendJson(res, 404, { error: 'NOT_FOUND' });
+  });
 };

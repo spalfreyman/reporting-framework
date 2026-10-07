@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from './harness.js';
 import { readConfiguration, resetConfiguration } from '../src/env.js';
 import { MemoryCache } from '../src/cache/memory.js';
 import { SourceClient, SourceCallError, constantTimeEquals, verifyScope } from '../src/sources/source-client.js';

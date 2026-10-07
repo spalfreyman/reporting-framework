@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from './harness.js';
 import { runJob } from '../src/index.js';
 import { resetConfiguration } from '../src/env.js';
 import type {
@@ -9,6 +9,13 @@ import type {
 import { ConcurrentModificationError } from '../src/shared/ct/ports.js';
 import type { OrderFact } from '../src/shared/rollup/keying.js';
 import type { ScannedOrder } from '../src/shared-node/ct-adapter.js';
+
+/**
+ * Inject a deterministic category resolver so the job never reaches for a real API client to
+ * build one (the production default calls `getCategoryResolver(getApiRoot())`). None of these
+ * cases exercise the category cube, so a constant is sufficient.
+ */
+const run: typeof runJob = (deps) => runJob({ categoryOf: () => '__none__', ...deps });
 
 /**
  * The rollup job processed real money data, so its correctness properties are worth pinning:
@@ -145,7 +152,7 @@ describe('rollup job', () => {
       order('o2', { totalPrice: { currencyCode: 'GBP', centAmount: 5000, fractionDigits: 2 } }),
     ]);
 
-    const result = await runJob({ port, scanner, now: () => new Date('2026-08-21T00:00:00Z') });
+    const result = await run({ port, scanner, now: () => new Date('2026-08-21T00:00:00Z') });
     expect(result.skipped).toBe(false);
     expect(result.ordersProcessed).toBe(2);
 
@@ -163,14 +170,14 @@ describe('rollup job', () => {
     const port = new FakePort();
     const orders = [order('o1'), order('o2', { totalPrice: { currencyCode: 'EUR', centAmount: 4000, fractionDigits: 2 } })];
 
-    await runJob({ port, scanner: fakeScanner(orders), now: () => new Date('2026-08-21T00:00:00Z') });
+    await run({ port, scanner: fakeScanner(orders), now: () => new Date('2026-08-21T00:00:00Z') });
     const first = JSON.stringify(
       (await port.get('reporting.facts.orders-daily', 'v1_d2022-08-12'))?.value
     );
 
     // Reset the cursor so the second run re-scans the same orders, as a backfill re-run would.
     await port.delete('reporting.cursors', 'reporting-rollup-job');
-    await runJob({ port, scanner: fakeScanner(orders), now: () => new Date('2026-08-21T00:05:00Z') });
+    await run({ port, scanner: fakeScanner(orders), now: () => new Date('2026-08-21T00:05:00Z') });
     const second = JSON.parse(
       JSON.stringify((await port.get('reporting.facts.orders-daily', 'v1_d2022-08-12'))?.value)
     );
@@ -184,7 +191,7 @@ describe('rollup job', () => {
     const port = new FakePort();
     // The same order id twice with the same version: the second write is a no-op.
     const orders = [order('dup'), order('dup')];
-    const result = await runJob({
+    const result = await run({
       port,
       scanner: fakeScanner(orders),
       now: () => new Date('2026-08-21T00:00:00Z'),
@@ -201,7 +208,7 @@ describe('rollup job', () => {
 
   it('lets a newer order version overwrite an older one', async () => {
     const port = new FakePort();
-    await runJob({
+    await run({
       port,
       scanner: fakeScanner([
         order('o1', {
@@ -215,7 +222,7 @@ describe('rollup job', () => {
     await port.delete('reporting.cursors', 'reporting-rollup-job');
     // Same order, higher version, larger amount — must win. taxedPrice dropped so net falls
     // back to totalPrice and the assertion targets the value under test.
-    await runJob({
+    await run({
       port,
       scanner: fakeScanner([
         order('o1', {
@@ -241,7 +248,7 @@ describe('rollup job', () => {
       heartbeatAt: '2026-08-21T00:00:00.000Z',
       expiresAt: '2026-08-21T00:40:00.000Z',
     });
-    const result = await runJob({
+    const result = await run({
       port,
       scanner: fakeScanner([order('o1')]),
       now: () => new Date('2026-08-21T00:10:00Z'),
@@ -260,14 +267,14 @@ describe('rollup job', () => {
       })
     );
     const scanner = fakeScanner(orders);
-    const result = await runJob({ port, scanner, now: () => new Date('2026-08-21T00:00:00Z') });
+    const result = await run({ port, scanner, now: () => new Date('2026-08-21T00:00:00Z') });
     expect(result.ordersProcessed).toBe(5);
     expect(scanner.calls).toBeGreaterThanOrEqual(3);
   });
 
   it('writes a watermark once the scan completes', async () => {
     const port = new FakePort();
-    await runJob({ port, scanner: fakeScanner([order('o1')]), now: () => new Date('2026-08-21T09:00:00Z') });
+    await run({ port, scanner: fakeScanner([order('o1')]), now: () => new Date('2026-08-21T09:00:00Z') });
     const watermark = await port.get<{ throughDate: string }>(
       'reporting.config',
       'rollup-watermark'

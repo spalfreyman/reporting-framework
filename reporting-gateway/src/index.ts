@@ -1,3 +1,4 @@
+import { serve } from '@hono/node-server';
 import { readConfiguration } from './env.js';
 import { createApp } from './app.js';
 import { createLogger } from './logger.js';
@@ -10,7 +11,7 @@ const main = (): void => {
   const config = readConfiguration();
   const log = createLogger(config.LOG_LEVEL, { service: 'reporting-gateway' });
 
-  createApp().listen(config.PORT, () => {
+  serve({ fetch: createApp().fetch, port: config.PORT }, () => {
     log.info('reporting gateway listening', {
       port: config.PORT,
       projectKey: config.CTP_PROJECT_KEY,

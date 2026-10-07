@@ -1,13 +1,12 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import request from 'supertest';
-import type { Express } from 'express';
+import { beforeAll, describe, expect, it, request } from './harness.js';
+import type { Hono } from 'hono';
 
 /**
  * The auth boundary.
  *
- * The JWT signature check itself belongs to @commercetools-backend/express (RS256 against
- * the Merchant Center's JWKS), so what is worth testing here is the WIRING around it — the
- * part we own and the part that has actually been wrong:
+ * The JWT signature check itself is delegated to `jose` (RS256 against the Merchant Center's
+ * JWKS) in src/middleware/session.ts, so what is worth testing here is the WIRING around it —
+ * the part we own and the part that has actually been wrong:
  *
  *  - /status must be reachable without a session, or Connect's liveness probe fails.
  *  - Every other route must be unreachable without one.
@@ -30,7 +29,7 @@ const ENV = {
   LOG_LEVEL: 'error',
 };
 
-let app: Express;
+let app: Hono;
 
 beforeAll(async () => {
   Object.assign(process.env, ENV);

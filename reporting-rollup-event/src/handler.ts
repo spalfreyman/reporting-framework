@@ -19,7 +19,13 @@ import type { Logger } from './logger.js';
  */
 export const processDelivery = async (
   body: unknown,
-  deps: { port: CustomObjectPort; apiRoot: ByProjectKeyRequestBuilder; log: Logger }
+  deps: {
+    port: CustomObjectPort;
+    apiRoot: ByProjectKeyRequestBuilder;
+    log: Logger;
+    /** Test seam: supply a resolver instead of building one from the API client. */
+    categoryOf?: (productId?: string | null) => string;
+  }
 ): Promise<{ status: number; outcome: string }> => {
   const config = readConfiguration();
   const decoded = decodeDelivery(body);
@@ -42,8 +48,8 @@ export const processDelivery = async (
 
   // Resolve each line's product category (orders carry only productId) so the item-grain
   // cubes can key on it. The resolver is memoised, so this is a map lookup after the first call.
-  const resolver = await getCategoryResolver(deps.apiRoot);
-  applyLineCategories(order, resolver.categoryOf);
+  const categoryOf = deps.categoryOf ?? (await getCategoryResolver(deps.apiRoot)).categoryOf;
+  applyLineCategories(order, categoryOf);
 
   const fact = toOrderFact(order, config.ROLLUP_TIMEZONE);
   const container = orderFactContainerFor(fact.businessDate);

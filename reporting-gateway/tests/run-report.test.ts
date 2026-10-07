@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from './harness.js';
 import { runReport } from '../src/run-report.js';
 import { MemoryCache } from '../src/cache/memory.js';
 import { SourceClient } from '../src/sources/source-client.js';

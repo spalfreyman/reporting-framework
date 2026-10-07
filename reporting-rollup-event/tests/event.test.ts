@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from './harness.js';
 import { decodeDelivery } from '../src/decode.js';
 import { processDelivery } from '../src/handler.js';
 import { resetConfiguration } from '../src/env.js';
@@ -107,10 +107,18 @@ const apiRootReturning = (order: unknown) =>
 
 const log = createLogger('error');
 
+/**
+ * Inject a deterministic category resolver so the handler never builds one from the (mocked)
+ * API client. The production default calls `getCategoryResolver(deps.apiRoot)`, which these
+ * order mocks do not implement; none of these cases exercise the category cube.
+ */
+const pd: typeof processDelivery = (body, deps) =>
+  processDelivery(body, { categoryOf: () => '__none__', ...deps });
+
 describe('delivery handler', () => {
   it('writes an order fact and acks', async () => {
     const port = new FakePort();
-    const result = await processDelivery(pubsub(orderCreated('o1')), {
+    const result = await pd(pubsub(orderCreated('o1')), {
       port,
       apiRoot: apiRootReturning(fakeOrder('o1', 1, 10000)),
       log,
@@ -124,7 +132,7 @@ describe('delivery handler', () => {
   it('re-fetches the order rather than trusting the message payload', async () => {
     // The message says nothing about money; the fact must reflect the FETCHED order.
     const port = new FakePort();
-    await processDelivery(pubsub(orderCreated('o2')), {
+    await pd(pubsub(orderCreated('o2')), {
       port,
       apiRoot: apiRootReturning(fakeOrder('o2', 1, 7777)),
       log,
@@ -135,13 +143,13 @@ describe('delivery handler', () => {
 
   it('ignores a stale (older-version) redelivery — no double count', async () => {
     const port = new FakePort();
-    await processDelivery(pubsub(orderCreated('o3')), {
+    await pd(pubsub(orderCreated('o3')), {
       port,
       apiRoot: apiRootReturning(fakeOrder('o3', 5, 5000)),
       log,
     });
     // A redelivery that fetches an OLDER version must not overwrite.
-    const result = await processDelivery(pubsub(orderCreated('o3')), {
+    const result = await pd(pubsub(orderCreated('o3')), {
       port,
       apiRoot: apiRootReturning(fakeOrder('o3', 3, 999)),
       log,
@@ -165,14 +173,14 @@ describe('delivery handler', () => {
         }),
       }),
     } as never;
-    const result = await processDelivery(pubsub(orderCreated('gone')), { port, apiRoot: notFound, log });
+    const result = await pd(pubsub(orderCreated('gone')), { port, apiRoot: notFound, log });
     expect(result.status).toBe(204);
     expect(result.outcome).toBe('order-deleted');
   });
 
   it('acks (does not retry) an undecodable delivery', async () => {
     const port = new FakePort();
-    const result = await processDelivery(
+    const result = await pd(
       { message: { data: 'garbage!!!' } },
       { port, apiRoot: apiRootReturning(null), log }
     );
@@ -182,7 +190,7 @@ describe('delivery handler', () => {
 
   it('acks an irrelevant message type without touching the store', async () => {
     const port = new FakePort();
-    const result = await processDelivery(pubsub({ notificationType: 'Message', resource: { typeId: 'customer', id: 'c1' } }), {
+    const result = await pd(pubsub({ notificationType: 'Message', resource: { typeId: 'customer', id: 'c1' } }), {
       port,
       apiRoot: apiRootReturning(null),
       log,

@@ -13,31 +13,20 @@
     "predev": "npm run sync:shared",
     "dev": "tsx src/index.ts",
     "pretest": "npm run sync:shared",
-    "test": "tsc --noEmit && vitest run",
+    "test": "tsc --noEmit && node --import tsx --test \"tests/*.test.ts\"",
     "backfill": "node dist/src/index.js"
   },
   "dependencies": {
     "@commercetools/platform-sdk": "^9.4.0",
     "@commercetools/ts-client": "^5.0.2",
-    "express": "^4.21.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
-    "typescript": "5.9.2",
-    "vitest": "^3.2.5"
+    "typescript": "5.9.2"
   },
   "engines": {
     "node": ">=22 <23"
-  },
-  "overrides": {
-    "vite": "^6.4.3",
-    "proxy-addr": "2.0.8",
-    "source-map-js": "1.2.2",
-    "tinypool": "2.2.0",
-    "brace-expansion": "5.0.12",
-    "@grpc/grpc-js": "1.14.5"
   }
 }
