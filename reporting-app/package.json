@@ -103,5 +103,12 @@
     "@types/react-router-dom": "<6",
     "headers-polyfill": "3.2.5",
     "nwsapi": "2.2.7"
+  },
+  "overrides": {
+    "proxy-addr": "2.0.8",
+    "source-map-js": "1.2.2",
+    "tinypool": "2.2.0",
+    "brace-expansion": "5.0.12",
+    "@grpc/grpc-js": "1.14.5"
   }
 }
