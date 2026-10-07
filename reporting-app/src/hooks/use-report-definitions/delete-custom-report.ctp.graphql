@@ -1,5 +1,0 @@
-mutation DeleteCustomReport($container: String!, $key: String!) {
-  deleteCustomObject(container: $container, key: $key) {
-    id
-  }
-}
