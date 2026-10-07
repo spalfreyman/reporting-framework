@@ -5,8 +5,12 @@ Reports are declarative definitions; data sources are independently installable 
 
 ## Layout rules (non-negotiable — Connect enforces them)
 
-- `connect.yaml` lives at the **repo root**. Every deployed app is a **root-sibling folder**
+- `connect.yaml` lives at the **repo root**. Every app it deploys is a **root-sibling folder**
   whose name matches its `deployAs[].name` (charset `[A-Za-z0-9_-]`, no slashes).
+- The MC custom app `reporting-app/` is a root-sibling folder but is **deliberately not in
+  `connect.yaml`**: Connect's SCA flags unclearable transitives in the mandatory `mc-scripts`
+  build toolchain, so the UI is built and hosted as a standalone Merchant Center Custom
+  Application (see `docs/deploy-frontend.md`). The connector ships backend apps only.
 - **No npm workspaces.** Connect runs `install` inside each app folder independently. The
   root `package.json` is a tooling hub only.
 - `shared/src` is **copied** into each app as `src/shared` by `scripts/sync-shared.mjs`

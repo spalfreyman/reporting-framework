@@ -1,40 +1,23 @@
 # commercetools Reporting Framework
 #
-# Four root-sibling applications. Each folder name matches its deployAs[].name.
+# Three root-sibling backend applications. Each folder name matches its deployAs[].name.
 #
-# There is deliberately NO top-level `inheritAs`: inheritAs.configuration applies to
-# EVERY application in the connector, including the merchant-center-custom-application,
-# which must never receive securedConfiguration. Each backend app therefore declares its
-# own CTP credentials.
+# The Merchant Center custom application (`reporting-app`) is deliberately NOT deployed by
+# this connector. Connect's software-composition analysis scans the full build dependency
+# tree of every app it builds, and the mandatory @commercetools-frontend/mc-scripts +
+# jest + eslint toolchain pulls transitive packages the SCA flags but that no released
+# version clears — and which never reach the deployed static bundle. The app is therefore
+# built and hosted as a standalone Merchant Center Custom Application (see
+# docs/deploy-frontend.md); it discovers this connector's gateway at boot via the Custom
+# Object the gateway publishes on postDeploy, so decoupling costs no wiring.
+#
+# There is deliberately NO top-level `inheritAs`: it would apply securedConfiguration to
+# every app. Each backend app declares its own CTP credentials.
 #
 # Deploy is single-pass: reporting-gateway's postDeploy writes its own injected
-# CONNECT_SERVICE_URL into Custom Object `reporting.config/gateway`, and the MC app reads
-# it at boot. No operator paste, no second redeploy.
+# CONNECT_SERVICE_URL into Custom Object `reporting.config/gateway`, and the standalone MC
+# app reads it at boot. No operator paste, no second redeploy.
 deployAs:
-  # ─────────────────────────────────────────────── Merchant Center custom application
-  - name: reporting-app
-    applicationType: merchant-center-custom-application
-    configuration:
-      standardConfiguration:
-        - key: CUSTOM_APPLICATION_ID
-          description: Application ID from Merchant Center > Organization Settings > Custom Applications.
-          required: true
-        - key: ENTRY_POINT_URI_PATH
-          description: Entry point URI path. Must match src/constants.ts entryPointUriPath.
-          required: true
-          default: 'reporting'
-        - key: CLOUD_IDENTIFIER
-          description: Cloud region identifier (gcp-eu, gcp-us, aws-eu, aws-us, gcp-au).
-          required: true
-          default: 'gcp-eu'
-        - key: REPORTING_GATEWAY_URL
-          description: >-
-            OPTIONAL override for the gateway base URL. Normally left empty: the gateway
-            publishes its own URL to Custom Object reporting.config/gateway on postDeploy
-            and the app discovers it at boot. Set only to pin a non-Connect gateway or for
-            local development.
-          required: false
-
   # ─────────────────────────────────────────────── query gateway
   - name: reporting-gateway
     applicationType: service
@@ -53,7 +36,7 @@ deployAs:
           default: 'europe-west1.gcp'
         - key: CLOUD_IDENTIFIER
           description: >-
-            Derives the Merchant Center session issuer for @commercetools-backend/express.
+            Derives the Merchant Center session issuer for the gateway's JWT session verifier.
             The JWT audience is derived from the injected CONNECT_SERVICE_URL origin.
           required: true
           default: 'gcp-eu'
