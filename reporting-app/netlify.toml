@@ -1,0 +1,10 @@
+# Static hosting for the Reporting Merchant Center custom application.
+# `mc-scripts build` emits the bundle into ./public; compile-html writes index.html there.
+# The app is a single-page app, so unknown paths must fall back to index.html.
+[build]
+  publish = "public"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
