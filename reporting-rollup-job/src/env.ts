@@ -22,6 +22,17 @@ const schema = z.object({
    * is already settled (e.g. imported historical orders).
    */
   ROLLUP_SAFE_LAG_SECONDS: z.coerce.number().int().nonnegative().default(120),
+  /**
+   * Restatement switch. Normally a per-order fact is written only when it is newer than the
+   * stored one (the monotonic guard that makes redelivery a no-op). Set true to rewrite facts
+   * unconditionally — needed when the fact SHAPE has changed (e.g. a new dimension) but the
+   * order versions have not, so the guard would otherwise keep the stale cells. Leave false for
+   * steady-state runs. Accepts the literal 'true' / 'false'.
+   */
+  ROLLUP_FORCE_REWRITE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   /** Top-N SKUs per store per day kept in order-lines-daily; the tail folds to __other__. */
   ITEM_TOP_N: z.coerce.number().int().positive().default(500),
 

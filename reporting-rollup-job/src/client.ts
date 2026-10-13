@@ -15,6 +15,7 @@ export const ORDER_SELECTION = `
   completedAt
   lastModifiedAt
   orderState
+  paymentState
   country
   totalPrice { currencyCode centAmount fractionDigits }
   taxedPrice { totalNet { centAmount } totalGross { centAmount } totalTax { centAmount } }
@@ -27,6 +28,10 @@ export const ORDER_SELECTION = `
     productId
     variant { sku }
     distributionChannel { key }
+    price {
+      value { centAmount }
+      custom { customFieldsRaw(includeNames: ["cost"]) { name value } }
+    }
     totalPrice { centAmount }
   }
 `;
