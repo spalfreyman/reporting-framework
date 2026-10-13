@@ -24,6 +24,7 @@ const ORDER_DIMENSIONS = [
   'distributionChannel',
   'country',
   'orderState',
+  'paymentState',
   'customerGroup',
   'customerType',
 ];
@@ -47,6 +48,11 @@ const live = (metricId: string, dimensions: string[]): MetricCapability => ({
   dimensions,
   costClass: 'cheap',
   exactness: 'exact',
+  // Product Search facets are current to the request. Declared per-metric so these live metrics
+  // are NOT judged by the source-level maxLag (which describes the order rollup's lag): without
+  // this, a near-real-time catalogue report rejects ct-native because the rollup lags an hour.
+  maxLagSeconds: 60,
+  typicalLagSeconds: 0,
 });
 
 export interface DescriptorOptions {
@@ -94,6 +100,10 @@ export const buildDescriptor = (options: DescriptorOptions = {}): DataSourceDesc
         materialized('shipping.revenue@orderdate', ORDER_DIMENSIONS),
         materialized('tax.collected@orderdate', ORDER_DIMENSIONS),
         materialized('units.sold@orderdate', [...ORDER_DIMENSIONS, 'product', 'category']),
+        // Cost of goods is item-grain only (per product/category), from the line item price's
+        // `cost` custom field captured at order time. Drives margin.gross@orderdate (a derived
+        // metric = revenue.net - cost.goods, evaluated by the gateway after aggregation).
+        materialized('cost.goods@orderdate', ['date', 'currency', 'store', 'product', 'category']),
         materialized('lines.count@orderdate', ORDER_DIMENSIONS),
         materialized('refunds.value@cashdate', ORDER_DIMENSIONS),
         materialized('returns.units@orderdate', [...ITEM_DIMENSIONS, 'returnReason']),
@@ -106,6 +116,13 @@ export const buildDescriptor = (options: DescriptorOptions = {}): DataSourceDesc
         materialized('shipments.count', ['date', 'store', 'shippingMethod']),
         materialized('shipments.onTime', ['date', 'store', 'shippingMethod']),
 
+        // ── Live stock, from the InventoryEntry API ──────────────────────────
+        // Served from the core InventoryEntry resource (NOT Product Search), so it is
+        // advertised even where Product Search is not activated. Grain is supplyChannel (the
+        // native stock location) / product (SKU) / category — never `store`, because a supply
+        // channel can belong to several stores and a store breakdown would double-count stock.
+        live('inventory.available', ['category', 'product', 'supplyChannel']),
+
         // ── Live catalogue, from Product Search facets ───────────────────────
         // Advertised only when Product Search is actually available on the project.
         ...(liveCatalogue
@@ -115,7 +132,6 @@ export const buildDescriptor = (options: DescriptorOptions = {}): DataSourceDesc
               live('price.min', ['category', 'productType', 'brand', 'currency']),
               live('price.max', ['category', 'productType', 'brand', 'currency']),
               live('price.mean', ['category', 'productType', 'brand', 'currency']),
-              live('inventory.available', ['category', 'product', 'store']),
             ]
           : []),
       ],
@@ -139,7 +155,13 @@ export const buildDescriptor = (options: DescriptorOptions = {}): DataSourceDesc
           filterable: true,
         },
         { dimensionId: 'distributionChannel', filterable: true },
+        {
+          dimensionId: 'supplyChannel',
+          canonicalKeyDefinition: 'commercetools:channel.key',
+          filterable: true,
+        },
         { dimensionId: 'orderState', filterable: true },
+        { dimensionId: 'paymentState', filterable: true },
         { dimensionId: 'customerGroup', filterable: true },
         { dimensionId: 'customerType', filterable: true },
         { dimensionId: 'productType', filterable: true },

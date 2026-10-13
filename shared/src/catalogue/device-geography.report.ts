@@ -87,8 +87,7 @@ export const deviceGeography: ReportDefinitionInput = {
       "span": 12,
       "query": {
         "metrics": [
-          "sessions.count",
-          "conversion.rate"
+          "sessions.count"
         ],
         "dimensions": [
           "device"

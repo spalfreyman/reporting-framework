@@ -81,6 +81,12 @@ export interface OrderFact {
     units: number;
     revenueNet: number;
     returnsUnits: number;
+    /**
+     * Cost of goods for the line (unit cost x units), captured at order time from the line
+     * item price's `cost` custom field. Absent/0 when the order carries no cost — drives
+     * cost.goods@orderdate and, via it, margin.
+     */
+    cost: number;
   }>;
   sourceLastModifiedAt: string;
   updatedAt: string;

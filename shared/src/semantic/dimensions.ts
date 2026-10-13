@@ -84,6 +84,18 @@ const defs: DimensionDef[] = [
     conformed: false,
     cardinalityHint: 'low',
   },
+  // `supplyChannel` is a commercetools channel with the InventorySupply role — the native
+  // stock location an InventoryEntry belongs to. It is the local-stock equivalent of an ERP
+  // `warehouse`, but a distinct resource, so it is NOT conformed with `warehouse` or with
+  // `distributionChannel` (a sales channel is a different concept from a stock location).
+  {
+    id: 'supplyChannel',
+    labelKey: 'dimension.supplyChannel',
+    keyType: 'reference',
+    reference: { resourceType: 'channel' },
+    conformed: false,
+    cardinalityHint: 'low',
+  },
   {
     id: 'customerGroup',
     labelKey: 'dimension.customerGroup',

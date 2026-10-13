@@ -44,6 +44,15 @@ export const productPerformance: ReportDefinitionInput = {
   },
   "allowedFilters": [
     {
+      "dimension": "product",
+      "ops": [
+        "in"
+      ],
+      "multi": true,
+      "required": false,
+      "valueSource": "ct-products"
+    },
+    {
       "dimension": "category",
       "ops": [
         "in"
