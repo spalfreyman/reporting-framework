@@ -40,13 +40,16 @@ export const JOB_NAME = 'reporting-rollup-job';
 /** Upsert a per-order fact, letting a newer version win a concurrent write. */
 const writeOrderFact = async (
   port: CustomObjectPort,
-  fact: OrderFact
+  fact: OrderFact,
+  force = false
 ): Promise<void> => {
   const container = orderFactContainerFor(fact.businessDate);
   const existing = await port.get<OrderFact>(container, fact.orderId);
 
-  // Monotonic guard: a stale redelivery must not overwrite a newer fact.
-  if (existing && existing.value.orderVersion >= fact.orderVersion) return;
+  // Monotonic guard: a stale redelivery must not overwrite a newer fact. A restatement run
+  // (force) bypasses it to rewrite facts whose SHAPE changed at an unchanged order version —
+  // the CAS on the stored object version below still prevents clobbering a concurrent writer.
+  if (!force && existing && existing.value.orderVersion >= fact.orderVersion) return;
 
   try {
     await port.put(container, fact.orderId, fact, existing?.version);
@@ -129,7 +132,7 @@ export const runJob = async (deps?: {
           const projection = scanned as unknown as OrderProjection;
           applyLineCategories(projection, categoryOf);
           const fact = toOrderFact(projection, config.ROLLUP_TIMEZONE);
-          await writeOrderFact(port, fact);
+          await writeOrderFact(port, fact, config.ROLLUP_FORCE_REWRITE);
           dirtyDays.add(fact.businessDate);
           ordersProcessed += 1;
         }

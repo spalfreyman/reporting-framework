@@ -22,11 +22,16 @@ export const FACET_TERM_CAP = 200;
  * endpoint answers 404 "Project does not exist" — misleading, but that is what it returns.
  * Detect it so the connector can advertise honestly rather than 500 per query.
  */
+export const productSearchStatus = (error: unknown): number | undefined => {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const direct = (error as { statusCode?: number }).statusCode;
+  const nested = (error as { body?: { statusCode?: number } }).body?.statusCode;
+  const status = Number(direct ?? nested);
+  return Number.isFinite(status) && status > 0 ? status : undefined;
+};
+
 export const isProductSearchUnavailable = (error: unknown): boolean => {
-  const status =
-    typeof error === 'object' && error !== null && 'statusCode' in error
-      ? Number((error as { statusCode?: number }).statusCode)
-      : undefined;
+  const status = productSearchStatus(error);
   const body =
     typeof error === 'object' && error !== null && 'body' in error
       ? JSON.stringify((error as { body?: unknown }).body)
@@ -58,7 +63,11 @@ export const probeProductSearch = async (
 
 /** Facet field for each dimension we can break down by. */
 const FACET_FIELD: Record<string, string> = {
-  category: 'categoriesSubTree',
+  // `categories` is the facetable keyword field for a product's directly-assigned categories
+  // (buckets come back keyed by category id). NOT `categoriesSubTree`: that is a subtree-match
+  // query field, so faceting on it counts a product under every ancestor category and inflates
+  // the breakdown — and is not a valid facet field, which the live query would reject.
+  category: 'categories',
   productType: 'productType',
   brand: 'variants.attributes.brand',
 };
@@ -170,6 +179,11 @@ export const readLiveFacets = async (
     }
   }
 
+  // Product Search rejects an `and` that wraps a single expression ("Single expression in
+  // [and]"), so only combine with `and` for 2+ filters; a lone filter is passed on its own.
+  const queryExpression =
+    filters.length === 0 ? undefined : filters.length === 1 ? filters[0] : { and: filters };
+
   let response;
   try {
     response = await root
@@ -177,7 +191,7 @@ export const readLiveFacets = async (
       .search()
       .post({
         body: {
-          query: filters.length > 0 ? { and: filters } : undefined,
+          query: queryExpression,
           facets: facets.length > 0 ? facets : undefined,
           limit: 0,
           markMatchingVariants: false,
@@ -193,7 +207,41 @@ export const readLiveFacets = async (
         { retryable: false }
       );
     }
-    throw error;
+    // Every other Product Search error must become a TYPED DspFailure, never a raw throw: the
+    // DSP harness turns an unrecognised error into an opaque "the data source encountered an
+    // internal error" and — for security — never echoes the upstream body to the gateway, so a
+    // raw throw is undiagnosable from the UI. Log the real status connector-side and translate
+    // it into a message that names the likely fix.
+    const status = productSearchStatus(error);
+    process.stderr.write(
+      `${JSON.stringify({
+        level: 'error',
+        message: 'Product Search facet query failed',
+        status: status ?? null,
+        detail: error instanceof Error ? error.message : String(error),
+      })}\n`
+    );
+    if (status === 401 || status === 403) {
+      throw new DspFailure(
+        'UPSTREAM_AUTH',
+        `Product Search rejected the request (HTTP ${status}). The connector's API client must ` +
+          'have the view_products scope and Product Search must be activated on the project.',
+        { retryable: false }
+      );
+    }
+    if (status === 400) {
+      throw new DspFailure(
+        'INTERNAL',
+        'Product Search rejected the catalogue facet query (HTTP 400). This is a connector bug: ' +
+          'the facet request was malformed for this project.',
+        { status: 502 }
+      );
+    }
+    throw new DspFailure(
+      'UPSTREAM_UNAVAILABLE',
+      `Product Search is temporarily unavailable${status ? ` (HTTP ${status})` : ''}.`,
+      { retryable: true }
+    );
   }
 
   const body = response.body as unknown as {

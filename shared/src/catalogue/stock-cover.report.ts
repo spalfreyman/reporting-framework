@@ -18,7 +18,6 @@ export const stockCover: ReportDefinitionInput = {
       "inventory.available"
     ],
     "sourceKinds": [
-      "erp",
       "commerce"
     ],
     "permissions": []
@@ -41,15 +40,6 @@ export const stockCover: ReportDefinitionInput = {
     "filters": []
   },
   "allowedFilters": [
-    {
-      "dimension": "warehouse",
-      "ops": [
-        "in"
-      ],
-      "multi": true,
-      "required": false,
-      "valueSource": "dsp"
-    },
     {
       "dimension": "category",
       "ops": [
@@ -74,7 +64,7 @@ export const stockCover: ReportDefinitionInput = {
       {
         "id": "r1",
         "tileIds": [
-          "by-wh"
+          "by-location"
         ]
       }
     ]
@@ -107,15 +97,15 @@ export const stockCover: ReportDefinitionInput = {
       }
     },
     {
-      "id": "by-wh",
-      "titleKey": "report.stockCover.byWarehouse",
+      "id": "by-location",
+      "titleKey": "report.stockCover.byLocation",
       "span": 12,
       "query": {
         "metrics": [
           "inventory.available"
         ],
         "dimensions": [
-          "warehouse",
+          "supplyChannel",
           "product"
         ],
         "pointInTime": true,
@@ -134,7 +124,7 @@ export const stockCover: ReportDefinitionInput = {
         "encoding": {
           "columns": [
             {
-              "field": "warehouse",
+              "field": "supplyChannel",
               "from": "primary"
             },
             {
