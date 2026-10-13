@@ -307,10 +307,27 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
  * Cells are keyed by the conformed order dimensions. This is a full rebuild from the facts,
  * never a delta: rebuilding converges and is auditable, whereas incrementing drifts.
  */
-export const foldOrdersDaily = (facts: OrderFact[]): FactCell[] => {
+export const foldOrdersDaily = (
+  facts: OrderFact[],
+  /**
+   * customerKey → the id of that customer's first-ever order. When supplied, each order is keyed
+   * by `customerType` (new = the first order, returning = a later one) and `customersNew` is set
+   * from it — new-vs-returning needs whole-history state a per-day fold cannot have, so the job
+   * computes this map once and threads it in. Omitted (partial run) → customerType `_none`,
+   * customersNew 0, corrected on the next complete pass.
+   */
+  firstOrderMap?: Map<string, string>
+): FactCell[] => {
   const byKey = new Map<string, FactCell>();
 
   for (const fact of facts) {
+    const isFirst = Boolean(
+      fact.customerKey && firstOrderMap?.get(fact.customerKey) === fact.orderId
+    );
+    // Without the first-order map (a partial run) or on a guest order, new/returning is unknown —
+    // report it as _none rather than mislabelling, and let the next complete pass restate it.
+    const customerType =
+      firstOrderMap === undefined || !fact.customerKey ? NONE : isFirst ? 'new' : 'returning';
     const k = {
       currency: fact.dims.currency,
       store: fact.dims.store,
@@ -318,16 +335,42 @@ export const foldOrdersDaily = (facts: OrderFact[]): FactCell[] => {
       country: fact.dims.country,
       orderState: fact.dims.orderState,
       paymentState: fact.dims.paymentState ?? NONE,
+      customerType,
     };
     const mapKey = Object.values(k).join('');
     const cell: FactCell = byKey.get(mapKey) ?? { k, m: {} };
     for (const [measure, value] of Object.entries(fact.measures)) {
+      // customersNew is derived from the first-order map below, not summed from the fact (0 there).
+      if (measure === 'customersNew') continue;
       cell.m[measure] = (cell.m[measure] ?? 0) + value;
     }
+    if (isFirst) cell.m.customersNew = (cell.m.customersNew ?? 0) + 1;
     byKey.set(mapKey, cell);
   }
 
   return [...byKey.values()];
+};
+
+/**
+ * From the FULL order-fact history, the id of each customer's first-ever order — the one that
+ * makes them a "new" customer. First = earliest businessDate, ties broken by orderId so the choice
+ * is deterministic across runs. Guests (no customerKey) are excluded.
+ */
+export const firstOrderIds = (facts: OrderFact[]): Map<string, string> => {
+  const first = new Map<string, { date: string; orderId: string }>();
+  for (const fact of facts) {
+    const key = fact.customerKey;
+    if (!key) continue;
+    const current = first.get(key);
+    if (
+      !current ||
+      fact.businessDate < current.date ||
+      (fact.businessDate === current.date && fact.orderId < current.orderId)
+    ) {
+      first.set(key, { date: fact.businessDate, orderId: fact.orderId });
+    }
+  }
+  return new Map([...first].map(([key, v]) => [key, v.orderId]));
 };
 
 /**

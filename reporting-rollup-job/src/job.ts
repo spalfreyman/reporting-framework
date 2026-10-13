@@ -14,7 +14,12 @@ import {
 import { CO } from './shared/schema/descriptor.js';
 import type { ByProjectKeyRequestBuilder } from '@commercetools/platform-sdk';
 import { orderFactContainerFor } from './shared/rollup/keying.js';
-import { applyLineCategories, toOrderFact, type OrderProjection } from './shared/rollup/order-mapping.js';
+import {
+  applyLineCategories,
+  firstOrderIds,
+  toOrderFact,
+  type OrderProjection,
+} from './shared/rollup/order-mapping.js';
 import { ConcurrentModificationError } from './shared/ct/ports.js';
 import type { OrderFact } from './shared/rollup/keying.js';
 import type { CustomObjectPort } from './shared/ct/ports.js';
@@ -188,6 +193,16 @@ export const runJob = async (deps?: {
 
       log.info('order scan complete', { ordersProcessed, dirtyDays: dirtyDays.size, scanComplete });
 
+      // Whole-history reads, only on a complete pass: new-vs-returning and cohort both need every
+      // customer's first order, which a per-day fold can't see. Read all facts once and share.
+      let allFacts: OrderFact[] | undefined;
+      let firstOrderMap: Map<string, string> | undefined;
+      if (scanComplete) {
+        allFacts = await readAllOrderFacts(getApiRoot());
+        firstOrderMap = firstOrderIds(allFacts);
+        log.info('first-order map built', { customers: firstOrderMap.size, facts: allFacts.length });
+      }
+
       // ── Rebuild dirty days ─────────────────────────────────────────────────
       let daysFolded = 0;
       for (const day of dirtyDays) {
@@ -201,7 +216,14 @@ export const runJob = async (deps?: {
         await foldDay(
           port,
           day,
-          { cubes, timezone: config.ROLLUP_TIMEZONE, restatementEpoch, itemTopN: config.ITEM_TOP_N, now: now() },
+          {
+            cubes,
+            timezone: config.ROLLUP_TIMEZONE,
+            restatementEpoch,
+            itemTopN: config.ITEM_TOP_N,
+            now: now(),
+            firstOrderMap,
+          },
           log
         );
         daysFolded += 1;
@@ -210,8 +232,7 @@ export const runJob = async (deps?: {
       // ── Rebuild the cohort snapshot (whole-history, not per-day) ────────────
       // Only on a complete pass: a customer's first-order month is only known once every order
       // has been folded, so a budget-truncated run would mislabel cohorts. Full rebuild each time.
-      if (scanComplete && cubes.includes(COHORT_CUBE) && !budget.exhausted()) {
-        const allFacts = await readAllOrderFacts(getApiRoot());
+      if (scanComplete && cubes.includes(COHORT_CUBE) && allFacts && !budget.exhausted()) {
         const result = await foldCohortSnapshot(
           port,
           allFacts,

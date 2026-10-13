@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyLineCategories,
   businessDateOf,
+  firstOrderIds,
   foldCohort,
   foldFulfilmentDaily,
   foldOrderCategoriesDaily,
@@ -195,6 +196,43 @@ describe('foldCohort (retention matrix)', () => {
 
   it('ignores guest orders (no customer key)', () => {
     expect(foldCohort([fact('', '2026-01-01')])).toEqual([]);
+  });
+});
+
+describe('firstOrderIds + new-vs-returning', () => {
+  const order = (id: string, email: string | undefined, completedAt: string): OrderProjection => ({
+    ...base,
+    id,
+    ...(email ? { customerEmail: email } : {}),
+    completedAt,
+  });
+
+  it('picks each customer first order by date, ties broken by orderId, excluding guests', () => {
+    const a1 = toOrderFact(order('a1', 'a@x', '2026-01-10T10:00:00.000Z'), 'UTC');
+    const a2 = toOrderFact(order('a2', 'a@x', '2026-02-10T10:00:00.000Z'), 'UTC');
+    const guest = toOrderFact(order('g1', undefined, '2026-01-01T10:00:00.000Z'), 'UTC');
+    const map = firstOrderIds([a2, a1, guest]); // order of input must not matter
+    expect(map.get(a1.customerKey!)).toBe('a1'); // January order, not February
+    expect(map.size).toBe(1); // guest excluded
+  });
+
+  it('keys orders-daily by customerType and counts new customers once', () => {
+    const a1 = toOrderFact(order('a1', 'a@x', '2026-01-10T10:00:00.000Z'), 'UTC');
+    const a2 = toOrderFact(order('a2', 'a@x', '2026-02-10T10:00:00.000Z'), 'UTC');
+    const map = firstOrderIds([a1, a2]);
+    const cells = foldOrdersDaily([a1, a2], map);
+    const byType = Object.fromEntries(cells.map((c) => [c.k.customerType, c.m]));
+    expect(byType.new.customersNew).toBe(1);
+    expect(byType.new.orders).toBe(1);
+    expect(byType.returning.orders).toBe(1);
+    expect(byType.returning.customersNew ?? 0).toBe(0);
+  });
+
+  it('without a first-order map, customerType is _none and customersNew 0 (partial run)', () => {
+    const a1 = toOrderFact(order('a1', 'a@x', '2026-01-10T10:00:00.000Z'), 'UTC');
+    const cells = foldOrdersDaily([a1]);
+    expect(cells[0].k.customerType).toBe('_none');
+    expect(cells[0].m.customersNew ?? 0).toBe(0);
   });
 });
 

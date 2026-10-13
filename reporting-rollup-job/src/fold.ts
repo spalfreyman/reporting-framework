@@ -154,7 +154,15 @@ export const foldCohortSnapshot = async (
 export const foldDay = async (
   port: CustomObjectPort,
   day: string,
-  options: { cubes: string[]; timezone: string; restatementEpoch: number; itemTopN: number; now: Date },
+  options: {
+    cubes: string[];
+    timezone: string;
+    restatementEpoch: number;
+    itemTopN: number;
+    now: Date;
+    /** customerKey → first order id, for new-vs-returning. Omitted on partial runs. */
+    firstOrderMap?: Map<string, string>;
+  },
   log: Logger
 ): Promise<FoldResult[]> => {
   const facts = await readOrderFactsForDay(port, day);
@@ -163,7 +171,7 @@ export const foldDay = async (
   for (const cube of options.cubes) {
     let cells: FactCell[];
     if (cube === 'orders-daily') {
-      cells = foldOrdersDaily(facts);
+      cells = foldOrdersDaily(facts, options.firstOrderMap);
     } else if (cube === 'order-lines-daily') {
       // Cap item grain at top-N per store, folding the tail into __other__ — this is what
       // keeps a large catalogue on the Custom Object tier.
