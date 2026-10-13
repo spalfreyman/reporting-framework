@@ -78,7 +78,7 @@ export const tradingDashboard: ReportDefinitionInput = {
     }
   ],
   "freshness": {
-    "maxAcceptableLagSeconds": 86400,
+    "maxAcceptableLagSeconds": 172800,
     "showAsOf": true
   },
   "layout": {
