@@ -85,6 +85,47 @@ export interface PoolVariant {
   prices: Record<string, number>;
 }
 
+/**
+ * The lifecycle a simulated order is in. Mapped to real commercetools order/payment states by
+ * BUSINESS_STATES so the state breakdowns in the reports are populated, and so `refunded`
+ * orders carry the CreditOwed payment state the rollup reads as a refund.
+ *
+ *   ordered   → Open      / Paid        (placed, being fulfilled)
+ *   completed → Complete  / Paid        (fulfilled)
+ *   canceled  → Cancelled / Failed
+ *   refunded  → Complete  / CreditOwed  (refund lands in refunds.value@cashdate)
+ *   abandoned → Open      / Pending     (started, never paid — browse-only in GA4)
+ */
+export type BusinessState = 'ordered' | 'completed' | 'canceled' | 'refunded' | 'abandoned';
+
+export interface StateMapping {
+  orderState: 'Open' | 'Confirmed' | 'Complete' | 'Cancelled';
+  paymentState: 'Paid' | 'Pending' | 'CreditOwed' | 'Failed' | 'BalanceDue';
+  /** Did a checkout complete? Drives whether GA4 gets a purchase or a browse-only session. */
+  converts: boolean;
+  /** Relative frequency in the generated mix. */
+  weight: number;
+}
+
+export const BUSINESS_STATES: Record<BusinessState, StateMapping> = {
+  completed: { orderState: 'Complete', paymentState: 'Paid', converts: true, weight: 0.5 },
+  ordered: { orderState: 'Open', paymentState: 'Paid', converts: true, weight: 0.18 },
+  abandoned: { orderState: 'Open', paymentState: 'Pending', converts: false, weight: 0.14 },
+  canceled: { orderState: 'Cancelled', paymentState: 'Failed', converts: true, weight: 0.1 },
+  refunded: { orderState: 'Complete', paymentState: 'CreditOwed', converts: true, weight: 0.08 },
+};
+
+export const pickBusinessState = (r: number): BusinessState => {
+  const entries = Object.entries(BUSINESS_STATES) as Array<[BusinessState, StateMapping]>;
+  const total = entries.reduce((s, [, m]) => s + m.weight, 0);
+  let acc = r * total;
+  for (const [state, mapping] of entries) {
+    acc -= mapping.weight;
+    if (acc <= 0) return state;
+  }
+  return 'completed';
+};
+
 export interface OrderDraftInputs {
   orderNumber: string;
   completedAt: string; // ISO
@@ -92,19 +133,71 @@ export interface OrderDraftInputs {
   country: string;
   channelKey?: string;
   storeKey?: string;
+  businessState: BusinessState;
   lines: Array<{ variant: PoolVariant; quantity: number; unitPrice: number }>;
+  /** Stable synthetic customer so repeat buyers form cohorts (new-vs-returning, retention). */
+  customerEmail: string;
+  /** Applied promotion, when this order was discounted. Drives penetration + discount metrics. */
+  promo?: { code: string; amount: number };
+  /** Dispatch info for fulfilled orders — synthetic ship date + carrier for the SLA report. */
+  fulfilment?: { shippedAt: string; carrier: string; shippingMethod: string };
 }
 
+/** A small pool of discount codes + the cart discount each maps to, created once by the generator. */
+export const PROMO_CODES = ['WELCOME10', 'VIP15', 'FLASH20'] as const;
+export const PROMO_RATE: Record<(typeof PROMO_CODES)[number], number> = {
+  WELCOME10: 0.1,
+  VIP15: 0.15,
+  FLASH20: 0.2,
+};
+export const CARRIERS = ['DHL', 'UPS', 'Royal Mail', 'DPD'] as const;
+export const SHIPPING_METHODS = ['Standard', 'Express', 'NextDay'] as const;
+/** Order custom Type carrying synthetic reporting metadata: dispatch (ship date/carrier/method)
+ *  and the applied promo code. One type keeps the Order Import draft simple and ref-free. */
+export const ORDER_META_TYPE_KEY = 'reporting-order-meta';
+/** Size of the recurring customer pool — small enough that buyers repeat across months. */
+export const CUSTOMER_POOL = 60;
+
 /** Builds one OrderImportDraft. Tax is split at a flat 19% so tax metrics are non-zero. */
+/** Key of the custom Type that carries the per-unit `cost` (a Money) on a price. */
+export const COST_TYPE_KEY = 'reporting-price-cost';
+
+/**
+ * Deterministic per-unit cost of goods for a SKU: 55-70% of the unit price, varied per SKU so
+ * gross margins land in a believable ~30-45% spread. Captured on each order line's price at
+ * import, which is where cost.goods@orderdate reads it from.
+ */
+export const costUnitAmount = (sku: string, unitPrice: number): number => {
+  const factor = 0.55 + (hash(sku) % 16) / 100; // 0.55 .. 0.70
+  return Math.round(unitPrice * factor);
+};
+
 export const toImportDraft = (input: OrderDraftInputs): Record<string, unknown> => {
-  const gross = input.lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const lineGross = input.lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  // totalPrice is the amount actually charged — i.e. AFTER the order discount. The discounted
+  // amount is recorded separately in discountOnTotalPrice, which the rollup reads as discount.value.
+  const discountAmount = input.promo?.amount ?? 0;
+  const gross = Math.max(0, lineGross - discountAmount);
   const net = Math.round(gross / 1.19);
+  const mapping = BUSINESS_STATES[input.businessState];
+
+  // One order custom type carries synthetic reporting metadata: the applied promo code and the
+  // dispatch fields. Built ref-free (plain string/datetime values) so the Order Import never 400s.
+  const metaFields: Record<string, unknown> = {};
+  if (input.promo) metaFields.promoCode = input.promo.code;
+  if (input.fulfilment) {
+    metaFields.shippedAt = input.fulfilment.shippedAt;
+    metaFields.carrier = input.fulfilment.carrier;
+    metaFields.shippingMethod = input.fulfilment.shippingMethod;
+  }
 
   return {
     orderNumber: input.orderNumber,
-    orderState: 'Complete',
+    orderState: mapping.orderState,
+    paymentState: mapping.paymentState,
     completedAt: input.completedAt,
     country: input.country,
+    customerEmail: input.customerEmail,
     ...(input.storeKey ? { store: { typeId: 'store', key: input.storeKey } } : {}),
     totalPrice: { currencyCode: input.currency, centAmount: gross },
     taxedPrice: {
@@ -112,10 +205,26 @@ export const toImportDraft = (input: OrderDraftInputs): Record<string, unknown> 
       totalGross: { currencyCode: input.currency, centAmount: gross },
       totalTax: { currencyCode: input.currency, centAmount: gross - net },
     },
+    ...(discountAmount > 0
+      ? { discountOnTotalPrice: { discountedAmount: { currencyCode: input.currency, centAmount: discountAmount } } }
+      : {}),
+    ...(Object.keys(metaFields).length > 0
+      ? { custom: { type: { typeId: 'type', key: ORDER_META_TYPE_KEY }, fields: metaFields } }
+      : {}),
     lineItems: input.lines.map((l) => ({
       name: { en: l.variant.name },
       variant: { sku: l.variant.sku },
-      price: { value: { currencyCode: input.currency, centAmount: l.unitPrice } },
+      price: {
+        value: { currencyCode: input.currency, centAmount: l.unitPrice },
+        // Stamp the per-unit cost on the line's price so the order captures cost at order time;
+        // the rollup reads price.custom.cost to produce cost.goods@orderdate and margin.
+        custom: {
+          type: { typeId: 'type', key: COST_TYPE_KEY },
+          fields: {
+            cost: { currencyCode: input.currency, centAmount: costUnitAmount(l.variant.sku, l.unitPrice) },
+          },
+        },
+      },
       quantity: l.quantity,
       ...(input.channelKey
         ? { distributionChannel: { typeId: 'channel', key: input.channelKey } }

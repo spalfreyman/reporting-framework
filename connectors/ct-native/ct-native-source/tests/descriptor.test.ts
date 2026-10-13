@@ -32,14 +32,49 @@ const liveIds = (available: boolean) => {
 describe('descriptor honesty about Product Search', () => {
   beforeEach(() => resetConfiguration());
 
-  it('omits live catalogue metrics when Product Search is unavailable', () => {
-    // The whole framework relies on a source advertising only what it can serve.
-    expect(liveIds(false)).toEqual([]);
+  it('omits the Product-Search catalogue metrics when Product Search is unavailable', () => {
+    // The whole framework relies on a source advertising only what it can serve. The facet
+    // metrics come from Product Search, so they must disappear when it is not activated.
+    const ids = liveIds(false);
+    expect(ids).not.toContain('products.count');
+    expect(ids).not.toContain('price.mean');
+    expect(ids).not.toContain('variants.count');
+  });
+
+  it('still advertises inventory.available when Product Search is unavailable (it reads InventoryEntry)', () => {
+    // inventory.available is served from the core InventoryEntry API, not Product Search, so
+    // stock reporting must work on a project (like sp-demo) where Product Search is off.
+    expect(liveIds(false)).toContain('inventory.available');
+  });
+
+  it('grains inventory.available by supplyChannel/product/category, never by store', () => {
+    // A supply channel can belong to several stores, so a store breakdown would double-count
+    // stock. supplyChannel is the one unambiguous native stock location.
+    resetConfiguration();
+    Object.assign(process.env, { ...ENV, MODE: 'live' });
+    const inv = buildDescriptor({ productSearchAvailable: false }).capabilities.metrics.find(
+      (m) => m.metricId === 'inventory.available'
+    );
+    expect(inv?.dimensions.sort()).toEqual(['category', 'product', 'supplyChannel']);
   });
 
   it('advertises live catalogue metrics when Product Search is available', () => {
     expect(liveIds(true)).toContain('products.count');
     expect(liveIds(true)).toContain('price.mean');
+  });
+
+  it('declares a low per-metric max lag on live metrics so near-real-time reports accept them', () => {
+    // Without this, the source-level maxLag (the order rollup's lag) would reject live
+    // catalogue metrics for a report demanding <=300s freshness (e.g. catalogue-health).
+    resetConfiguration();
+    Object.assign(process.env, { ...ENV, MODE: 'live' });
+    const live = buildDescriptor({ productSearchAvailable: true }).capabilities.metrics.filter(
+      (m) => m.execution === 'live'
+    );
+    expect(live.length).toBeGreaterThan(0);
+    for (const m of live) {
+      expect(m.maxLagSeconds !== undefined && m.maxLagSeconds <= 300).toBe(true);
+    }
   });
 
   it('still advertises the order metrics regardless of Product Search', () => {

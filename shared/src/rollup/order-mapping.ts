@@ -25,6 +25,13 @@ export interface OrderProjection {
    */
   completedAt?: string | null;
   orderState?: string | null;
+  /**
+   * The payment lifecycle state (Paid, Pending, CreditOwed, Failed, BalanceDue). Carried as a
+   * reporting dimension, and the signal for a refund: a `CreditOwed` order is treated as fully
+   * refunded (see orderMeasures). A missing value is NONE, so live orders without one are
+   * unaffected.
+   */
+  paymentState?: string | null;
   country?: string | null;
   totalPrice: { currencyCode: string; centAmount: number; fractionDigits?: number };
   taxedPrice?: {
@@ -39,13 +46,27 @@ export interface OrderProjection {
   customerEmail?: string | null;
   /** Discount codes applied, used only to mark an order as "promoted". */
   discountCodes?: Array<{ discountCode?: { id?: string | null } | null }> | null;
+  /**
+   * Order-level custom fields carrying synthetic reporting metadata written by the generator:
+   * `promoCode` (promotion applied), and `shippedAt`/`carrier`/`shippingMethod` (dispatch). The
+   * scan selects them via `custom { customFieldsRaw(includeNames:[...]) { name value } }`.
+   */
+  custom?: { customFieldsRaw?: Array<{ name: string; value?: unknown }> | null } | null;
   lineItems?: Array<{
     quantity: number;
     productId?: string | null;
     variant?: { sku?: string | null } | null;
     name?: Record<string, string> | null;
     distributionChannel?: { key?: string | null } | null;
-    price?: { value?: { centAmount: number } | null } | null;
+    /**
+     * The line item's price snapshot. `custom.customFieldsRaw` carries the `cost` custom field
+     * (a Money) captured at order time — the unit cost of goods. The scan selects it with
+     * `price { value { centAmount } custom { customFieldsRaw(includeNames:["cost"]) { name value } } }`.
+     */
+    price?: {
+      value?: { centAmount: number } | null;
+      custom?: { customFieldsRaw?: Array<{ name: string; value?: unknown }> | null } | null;
+    } | null;
     totalPrice?: { centAmount: number } | null;
     /**
      * The product's reporting category key. An order line does not carry this — it is
@@ -58,6 +79,15 @@ export interface OrderProjection {
 
 /** Placeholder for a dimension the order does not carry, so keys are never empty strings. */
 export const NONE = '_none';
+
+/** Dispatch SLA: a shipment is "on time" when shipped within this many days of the order. */
+export const DISPATCH_SLA_DAYS = 2;
+
+/** Read a string order-level custom field (promoCode / carrier / shippingMethod / shippedAt). */
+const orderCustomField = (order: OrderProjection, name: string): string | undefined => {
+  const raw = (order.custom?.customFieldsRaw ?? []).find((f) => f.name === name)?.value;
+  return raw === null || raw === undefined ? undefined : String(raw);
+};
 
 /** The distribution channel of an order, taken from its line items when they agree. */
 const channelOf = (order: OrderProjection): string => {
@@ -72,6 +102,20 @@ const channelOf = (order: OrderProjection): string => {
 };
 
 const centAmount = (money?: { centAmount: number } | null): number => money?.centAmount ?? 0;
+
+/**
+ * Unit cost of goods for a line, read from its price's `cost` custom field (a Money captured at
+ * order time). Returns 0 when the order carries no cost — advertised cost reads as "none" rather
+ * than wrong, exactly like the other not-yet-populated measures.
+ */
+const lineUnitCost = (line: { price?: { custom?: { customFieldsRaw?: Array<{ name: string; value?: unknown }> | null } | null } | null }): number => {
+  const raw = (line.price?.custom?.customFieldsRaw ?? []).find((f) => f.name === 'cost')?.value;
+  if (raw && typeof raw === 'object' && 'centAmount' in raw) {
+    const n = Number((raw as { centAmount?: unknown }).centAmount);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 export interface OrderMeasures {
   currency: string;
@@ -110,6 +154,11 @@ export const orderMeasures = (order: OrderProjection): OrderMeasures => {
   const units = (order.lineItems ?? []).reduce((sum, line) => sum + (line.quantity ?? 0), 0);
   const lines = (order.lineItems ?? []).length;
   const promoted = (order.discountCodes ?? []).length > 0 || discount > 0 ? 1 : 0;
+  // Refund convention: `CreditOwed` means the balance is owed back to the customer, i.e. the
+  // order was refunded. We treat it as a full refund of net — the only refund signal the
+  // projection carries. revenue.net@orderdate still books the sale on the order date; the
+  // refund lands in refunds.value@cashdate, exactly the restatement split the metrics model.
+  const refunds = order.paymentState === 'CreditOwed' ? net : 0;
 
   return {
     currency: order.totalPrice.currencyCode,
@@ -121,7 +170,7 @@ export const orderMeasures = (order: OrderProjection): OrderMeasures => {
     discount,
     shipping,
     tax,
-    refunds: 0,
+    refunds,
     units,
     lines,
     ordersPromoted: promoted,
@@ -173,6 +222,20 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
   const measures = orderMeasures(order);
   const businessDate = businessDateOf(order, timezone);
 
+  // Promotion: the code applied (from the order custom field), if any.
+  const promoCode = orderCustomField(order, 'promoCode') ?? NONE;
+  const redemptions = promoCode !== NONE ? 1 : 0;
+
+  // Fulfilment: a synthetic dispatch stamped on fulfilled orders. On time when shipped within
+  // the SLA of the order date. Counts feed the fulfilment-daily cube (shipments.count/onTime).
+  const shippedAt = orderCustomField(order, 'shippedAt');
+  const shipments = shippedAt ? 1 : 0;
+  const shippedOnTime =
+    shippedAt &&
+    Date.parse(shippedAt.slice(0, 10)) - Date.parse(businessDate) <= DISPATCH_SLA_DAYS * 86_400_000
+      ? 1
+      : 0;
+
   return {
     schemaVersion: 1,
     orderId: order.id,
@@ -188,6 +251,10 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
       distributionChannel: channelOf(order),
       country: order.country ?? NONE,
       orderState: order.orderState ?? NONE,
+      paymentState: order.paymentState ?? NONE,
+      discountCode: promoCode,
+      shippingMethod: orderCustomField(order, 'shippingMethod') ?? NONE,
+      carrier: orderCustomField(order, 'carrier') ?? NONE,
     },
     measures: {
       orders: measures.orders,
@@ -201,6 +268,9 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
       units: measures.units,
       lines: measures.lines,
       ordersPromoted: measures.ordersPromoted,
+      redemptions,
+      shipments,
+      shipmentsOnTime: shippedOnTime,
       // Left to a future pass; advertised metrics that read 0 are handled as "none" by the
       // additive path rather than being wrong.
       customersNew: 0,
@@ -213,6 +283,8 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
       units: line.quantity ?? 0,
       revenueNet: centAmount(line.totalPrice),
       returnsUnits: 0,
+      // Cost of goods for the line: unit cost (from the price's `cost` custom field) x quantity.
+      cost: lineUnitCost(line) * (line.quantity ?? 0),
     })),
     sourceLastModifiedAt: order.lastModifiedAt,
     updatedAt: order.lastModifiedAt,
@@ -235,6 +307,7 @@ export const foldOrdersDaily = (facts: OrderFact[]): FactCell[] => {
       distributionChannel: fact.dims.distributionChannel ?? fact.dims.channel ?? NONE,
       country: fact.dims.country,
       orderState: fact.dims.orderState,
+      paymentState: fact.dims.paymentState ?? NONE,
     };
     const mapKey = Object.values(k).join('');
     const cell: FactCell = byKey.get(mapKey) ?? { k, m: {} };
@@ -264,6 +337,7 @@ export const foldOrderLinesDaily = (facts: OrderFact[]): FactCell[] => {
       cell.m.units = (cell.m.units ?? 0) + item.units;
       cell.m.revenueNet = (cell.m.revenueNet ?? 0) + item.revenueNet;
       cell.m.returnsUnits = (cell.m.returnsUnits ?? 0) + item.returnsUnits;
+      cell.m.cost = (cell.m.cost ?? 0) + (item.cost ?? 0);
       byKey.set(mapKey, cell);
     }
   }
@@ -290,8 +364,63 @@ export const foldOrderCategoriesDaily = (facts: OrderFact[]): FactCell[] => {
       cell.m.units = (cell.m.units ?? 0) + item.units;
       cell.m.revenueNet = (cell.m.revenueNet ?? 0) + item.revenueNet;
       cell.m.returnsUnits = (cell.m.returnsUnits ?? 0) + item.returnsUnits;
+      cell.m.cost = (cell.m.cost ?? 0) + (item.cost ?? 0);
       byKey.set(mapKey, cell);
     }
+  }
+
+  return [...byKey.values()];
+};
+
+/**
+ * Folds order-facts into the `promotions-daily` cube: discount-code redemptions per code.
+ *
+ * Only orders that carried a promo code contribute. Keyed by the conformed discount dimensions
+ * (currency, store, discountCode) so promotion-effectiveness can break redemptions down by code.
+ */
+export const foldPromotionsDaily = (facts: OrderFact[]): FactCell[] => {
+  const byKey = new Map<string, FactCell>();
+
+  for (const fact of facts) {
+    if ((fact.measures.redemptions ?? 0) <= 0) continue; // only promoted orders
+    const k = {
+      currency: fact.dims.currency,
+      store: fact.dims.store,
+      discountCode: fact.dims.discountCode ?? NONE,
+    };
+    const mapKey = Object.values(k).join('');
+    const cell: FactCell = byKey.get(mapKey) ?? { k, m: {} };
+    cell.m.redemptions = (cell.m.redemptions ?? 0) + (fact.measures.redemptions ?? 0);
+    cell.m.ordersPromoted = (cell.m.ordersPromoted ?? 0) + (fact.measures.ordersPromoted ?? 0);
+    cell.m.discount = (cell.m.discount ?? 0) + (fact.measures.discount ?? 0);
+    byKey.set(mapKey, cell);
+  }
+
+  return [...byKey.values()];
+};
+
+/**
+ * Folds order-facts into the `fulfilment-daily` cube: shipment counts + on-time counts.
+ *
+ * Only orders with a dispatch (a shipment) contribute. Keyed by (store, shippingMethod) so the
+ * fulfilment SLA report can break dispatch performance down by method. `shipments.onTime` is a
+ * count; the on-time RATE is a derived metric (onTime / count) computed after aggregation.
+ */
+export const foldFulfilmentDaily = (facts: OrderFact[]): FactCell[] => {
+  const byKey = new Map<string, FactCell>();
+
+  for (const fact of facts) {
+    if ((fact.measures.shipments ?? 0) <= 0) continue; // only shipped orders
+    const k = {
+      store: fact.dims.store,
+      shippingMethod: fact.dims.shippingMethod ?? NONE,
+      carrier: fact.dims.carrier ?? NONE,
+    };
+    const mapKey = Object.values(k).join('\u0000');
+    const cell: FactCell = byKey.get(mapKey) ?? { k, m: {} };
+    cell.m.shipments = (cell.m.shipments ?? 0) + (fact.measures.shipments ?? 0);
+    cell.m.shipmentsOnTime = (cell.m.shipmentsOnTime ?? 0) + (fact.measures.shipmentsOnTime ?? 0);
+    byKey.set(mapKey, cell);
   }
 
   return [...byKey.values()];

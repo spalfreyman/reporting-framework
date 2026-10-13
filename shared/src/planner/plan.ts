@@ -119,8 +119,16 @@ export const planTile = (
   }
 
   // ── Dimensions ────────────────────────────────────────────────────────────
-  const grain = tile.query.grain === 'inherit' ? ctx.grain : tile.query.grain;
+  const requestedGrain = tile.query.grain === 'inherit' ? ctx.grain : tile.query.grain;
   const effectivePointInTime = tile.query.pointInTime;
+  // A breakdown tile (e.g. "by store") must roll the whole range into one row per group, not
+  // one row per (day, group). It inherits the report's day grain, which would otherwise push
+  // `date` into the join key and split every group by day. Treat a tile as NON-temporal — and
+  // drop its time grain — when it neither groups by `date` nor encodes `date` in its chart
+  // (timeseries tiles encode x:date and keep their grain).
+  const tileEncodesDate = /"field"\s*:\s*"date"/.test(JSON.stringify(tile.chart ?? {}));
+  const isTemporalTile = tile.query.dimensions.includes('date') || tileEncodesDate;
+  const grain = !effectivePointInTime && !isTemporalTile ? null : requestedGrain;
   const { dimensions: withCurrency, injected } = injectCurrencyDimension(
     permitted,
     tile.query.dimensions,

@@ -15,18 +15,25 @@ export const ORDER_SELECTION = `
   completedAt
   lastModifiedAt
   orderState
+  paymentState
   country
   totalPrice { currencyCode centAmount fractionDigits }
   taxedPrice { totalNet { centAmount } totalGross { centAmount } totalTax { centAmount } }
   shippingInfo { price { centAmount } }
   store { key }
   customerId
+  customerEmail
   discountCodes { discountCode { id } }
+  custom { customFieldsRaw(includeNames: ["promoCode", "shippedAt", "carrier", "shippingMethod"]) { name value } }
   lineItems {
     quantity
     productId
     variant { sku }
     distributionChannel { key }
+    price {
+      value { centAmount }
+      custom { customFieldsRaw(includeNames: ["cost"]) { name value } }
+    }
     totalPrice { centAmount }
   }
 `;

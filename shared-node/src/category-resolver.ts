@@ -14,6 +14,12 @@ export const CATEGORY_NONE = '_none';
 
 export interface CategoryResolver {
   categoryOf(productId?: string | null): string;
+  /**
+   * Resolves a variant SKU to its reporting category key. InventoryEntry (and other
+   * SKU-grain resources) carry only the SKU, never the productId, so stock reporting needs
+   * this SKU-keyed view of the same product↔category map.
+   */
+  categoryOfSku(sku?: string | null): string;
   /** How many products were mapped — useful for a one-line log after priming. */
   size: number;
 }
@@ -26,9 +32,14 @@ interface CategoryDoc {
   key?: string;
   ancestors?: CategoryRef[];
 }
+interface VariantRef {
+  sku?: string;
+}
 interface ProductProjectionDoc {
   id: string;
   categories?: CategoryRef[];
+  masterVariant?: VariantRef;
+  variants?: VariantRef[];
 }
 
 const pageThrough = async <T>(
@@ -61,15 +72,22 @@ const buildResolver = async (root: ByProjectKeyRequestBuilder): Promise<Category
   });
 
   const byProduct = new Map<string, string>();
+  const bySku = new Map<string, string>();
   for (const p of products) {
     const first = p.categories?.[0];
-    if (first) byProduct.set(p.id, keyById.get(first.id) ?? first.id);
+    if (!first) continue;
+    const categoryKey = keyById.get(first.id) ?? first.id;
+    byProduct.set(p.id, categoryKey);
+    for (const variant of [p.masterVariant, ...(p.variants ?? [])]) {
+      if (variant?.sku) bySku.set(variant.sku, categoryKey);
+    }
   }
 
   return {
     size: byProduct.size,
     categoryOf: (productId?: string | null) =>
       (productId && byProduct.get(productId)) || CATEGORY_NONE,
+    categoryOfSku: (sku?: string | null) => (sku && bySku.get(sku)) || CATEGORY_NONE,
   };
 };
 
