@@ -25,6 +25,13 @@ export interface OrderProjection {
    */
   completedAt?: string | null;
   orderState?: string | null;
+  /**
+   * The payment lifecycle state (Paid, Pending, CreditOwed, Failed, BalanceDue). Carried as a
+   * reporting dimension, and the signal for a refund: a `CreditOwed` order is treated as fully
+   * refunded (see orderMeasures). A missing value is NONE, so live orders without one are
+   * unaffected.
+   */
+  paymentState?: string | null;
   country?: string | null;
   totalPrice: { currencyCode: string; centAmount: number; fractionDigits?: number };
   taxedPrice?: {
@@ -45,7 +52,15 @@ export interface OrderProjection {
     variant?: { sku?: string | null } | null;
     name?: Record<string, string> | null;
     distributionChannel?: { key?: string | null } | null;
-    price?: { value?: { centAmount: number } | null } | null;
+    /**
+     * The line item's price snapshot. `custom.customFieldsRaw` carries the `cost` custom field
+     * (a Money) captured at order time — the unit cost of goods. The scan selects it with
+     * `price { value { centAmount } custom { customFieldsRaw(includeNames:["cost"]) { name value } } }`.
+     */
+    price?: {
+      value?: { centAmount: number } | null;
+      custom?: { customFieldsRaw?: Array<{ name: string; value?: unknown }> | null } | null;
+    } | null;
     totalPrice?: { centAmount: number } | null;
     /**
      * The product's reporting category key. An order line does not carry this — it is
@@ -72,6 +87,20 @@ const channelOf = (order: OrderProjection): string => {
 };
 
 const centAmount = (money?: { centAmount: number } | null): number => money?.centAmount ?? 0;
+
+/**
+ * Unit cost of goods for a line, read from its price's `cost` custom field (a Money captured at
+ * order time). Returns 0 when the order carries no cost — advertised cost reads as "none" rather
+ * than wrong, exactly like the other not-yet-populated measures.
+ */
+const lineUnitCost = (line: { price?: { custom?: { customFieldsRaw?: Array<{ name: string; value?: unknown }> | null } | null } | null }): number => {
+  const raw = (line.price?.custom?.customFieldsRaw ?? []).find((f) => f.name === 'cost')?.value;
+  if (raw && typeof raw === 'object' && 'centAmount' in raw) {
+    const n = Number((raw as { centAmount?: unknown }).centAmount);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 export interface OrderMeasures {
   currency: string;
@@ -110,6 +139,11 @@ export const orderMeasures = (order: OrderProjection): OrderMeasures => {
   const units = (order.lineItems ?? []).reduce((sum, line) => sum + (line.quantity ?? 0), 0);
   const lines = (order.lineItems ?? []).length;
   const promoted = (order.discountCodes ?? []).length > 0 || discount > 0 ? 1 : 0;
+  // Refund convention: `CreditOwed` means the balance is owed back to the customer, i.e. the
+  // order was refunded. We treat it as a full refund of net — the only refund signal the
+  // projection carries. revenue.net@orderdate still books the sale on the order date; the
+  // refund lands in refunds.value@cashdate, exactly the restatement split the metrics model.
+  const refunds = order.paymentState === 'CreditOwed' ? net : 0;
 
   return {
     currency: order.totalPrice.currencyCode,
@@ -121,7 +155,7 @@ export const orderMeasures = (order: OrderProjection): OrderMeasures => {
     discount,
     shipping,
     tax,
-    refunds: 0,
+    refunds,
     units,
     lines,
     ordersPromoted: promoted,
@@ -188,6 +222,7 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
       distributionChannel: channelOf(order),
       country: order.country ?? NONE,
       orderState: order.orderState ?? NONE,
+      paymentState: order.paymentState ?? NONE,
     },
     measures: {
       orders: measures.orders,
@@ -213,6 +248,8 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
       units: line.quantity ?? 0,
       revenueNet: centAmount(line.totalPrice),
       returnsUnits: 0,
+      // Cost of goods for the line: unit cost (from the price's `cost` custom field) x quantity.
+      cost: lineUnitCost(line) * (line.quantity ?? 0),
     })),
     sourceLastModifiedAt: order.lastModifiedAt,
     updatedAt: order.lastModifiedAt,
@@ -235,6 +272,7 @@ export const foldOrdersDaily = (facts: OrderFact[]): FactCell[] => {
       distributionChannel: fact.dims.distributionChannel ?? fact.dims.channel ?? NONE,
       country: fact.dims.country,
       orderState: fact.dims.orderState,
+      paymentState: fact.dims.paymentState ?? NONE,
     };
     const mapKey = Object.values(k).join('');
     const cell: FactCell = byKey.get(mapKey) ?? { k, m: {} };
@@ -264,6 +302,7 @@ export const foldOrderLinesDaily = (facts: OrderFact[]): FactCell[] => {
       cell.m.units = (cell.m.units ?? 0) + item.units;
       cell.m.revenueNet = (cell.m.revenueNet ?? 0) + item.revenueNet;
       cell.m.returnsUnits = (cell.m.returnsUnits ?? 0) + item.returnsUnits;
+      cell.m.cost = (cell.m.cost ?? 0) + (item.cost ?? 0);
       byKey.set(mapKey, cell);
     }
   }
@@ -290,6 +329,7 @@ export const foldOrderCategoriesDaily = (facts: OrderFact[]): FactCell[] => {
       cell.m.units = (cell.m.units ?? 0) + item.units;
       cell.m.revenueNet = (cell.m.revenueNet ?? 0) + item.revenueNet;
       cell.m.returnsUnits = (cell.m.returnsUnits ?? 0) + item.returnsUnits;
+      cell.m.cost = (cell.m.cost ?? 0) + (item.cost ?? 0);
       byKey.set(mapKey, cell);
     }
   }
