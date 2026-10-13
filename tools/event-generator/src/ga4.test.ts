@@ -8,6 +8,8 @@ const order = (completedAt: string): OrderDraftInputs => ({
   completedAt,
   currency: 'EUR',
   country: 'DE',
+  businessState: 'completed',
+  customerEmail: 'sim-cust-1@demo.example',
   lines: [
     { variant: { sku: 'A', name: 'A', prices: { EUR: 1000 } }, quantity: 2, unitPrice: 1000 },
     { variant: { sku: 'B', name: 'B', prices: { EUR: 500 } }, quantity: 1, unitPrice: 500 },

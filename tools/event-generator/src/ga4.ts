@@ -114,6 +114,49 @@ export const buildGa4Payload = (order: OrderDraftInputs, seed: number): Ga4Paylo
 export const isWithinMpWindow = (order: OrderDraftInputs, now = Date.now()): boolean =>
   now - Date.parse(order.completedAt) < MP_MAX_AGE_MS;
 
+/**
+ * Builds a NON-converting browse session: a real visitor who looks (and sometimes carts or
+ * starts checkout) but does not buy. Without these, sessions ≈ orders and the conversion rate
+ * pins at ~100%; a spread of browse sessions is what makes conversion land in a realistic
+ * low-single-digit band and gives the funnel genuine drop-off. No `purchase` event, so it
+ * never fabricates revenue.
+ */
+export const buildBrowsePayload = (
+  items: Array<{ item_id: string; item_name: string; price: number }>,
+  currency: string,
+  seed: number,
+  timestampMs: number
+): Ga4Payload => {
+  const r = rng(seed);
+  const clientId = `${Math.floor(r() * 1e10)}.${Math.floor(r() * 1e10)}`;
+  const sessionId = String(Math.floor(timestampMs / 1000) + Math.floor(r() * 1000));
+  const traffic = TRAFFIC[Math.floor(r() * TRAFFIC.length)];
+  const device = DEVICES[Math.floor(r() * DEVICES.length)];
+  const common = {
+    session_id: sessionId,
+    engagement_time_msec: 1,
+    source: traffic.source,
+    medium: traffic.medium,
+    device_category: device,
+  };
+
+  const events: Ga4Payload['events'] = items.map((item) => ({
+    name: 'view_item',
+    params: { ...common, currency, value: item.price, items: [item] },
+  }));
+  // Realistic funnel drop-off: a minority cart, fewer still begin checkout, none purchase.
+  const carted = items.filter(() => r() < 0.3);
+  for (const item of carted) {
+    events.push({ name: 'add_to_cart', params: { ...common, currency, value: item.price, items: [item] } });
+  }
+  if (carted.length > 0 && r() < 0.4) {
+    const value = carted.reduce((s, i) => s + i.price, 0);
+    events.push({ name: 'begin_checkout', params: { ...common, currency, value, items: carted } });
+  }
+
+  return { client_id: clientId, timestamp_micros: timestampMs * 1000, events };
+};
+
 export class Ga4Sender {
   sent = 0;
   skippedTooOld = 0;
@@ -132,7 +175,19 @@ export class Ga4Sender {
       this.skippedTooOld += 1;
       return 'too-old';
     }
-    const payload = buildGa4Payload(order, seed);
+    return this.post(buildGa4Payload(order, seed));
+  }
+
+  /** Send an already-built payload (e.g. a non-converting browse session), honouring the 72h window. */
+  async sendRaw(payload: Ga4Payload, now = Date.now()): Promise<'sent' | 'too-old' | 'failed'> {
+    if (now - payload.timestamp_micros / 1000 >= MP_MAX_AGE_MS) {
+      this.skippedTooOld += 1;
+      return 'too-old';
+    }
+    return this.post(payload);
+  }
+
+  private async post(payload: Ga4Payload): Promise<'sent' | 'failed'> {
     try {
       const response = await fetch(this.endpoint(), { method: 'POST', body: JSON.stringify(payload) });
       // The debug endpoint returns 200 with a validationMessages array; a non-empty array
@@ -144,12 +199,14 @@ export class Ga4Sender {
           return 'failed';
         }
       } else if (!response.ok) {
+        if (process.env.GA4_MP_VERBOSE === 'true') process.stderr.write(`GA4_FAIL status=${response.status} body=${(await response.text()).slice(0,200)}\n`);
         this.failed += 1;
         return 'failed';
       }
       this.sent += 1;
       return 'sent';
-    } catch {
+    } catch (error) {
+      if (process.env.GA4_MP_VERBOSE === 'true') process.stderr.write(`GA4_THROW ${error instanceof Error ? error.message : String(error)} | cause=${JSON.stringify((error as {cause?: unknown})?.cause, (_k,v)=>v instanceof Error?{name:v.name,message:v.message,code:(v as {code?:string}).code}:v)}\n`);
       this.failed += 1;
       return 'failed';
     }

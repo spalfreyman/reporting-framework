@@ -10,9 +10,11 @@ import {
 } from './shared/rollup/keying.js';
 import {
   NONE,
+  foldFulfilmentDaily,
   foldOrderCategoriesDaily,
   foldOrderLinesDaily,
   foldOrdersDaily,
+  foldPromotionsDaily,
 } from './shared/rollup/order-mapping.js';
 import { orderFactContainerFor } from './shared/rollup/keying.js';
 import { stableHash } from './shared/util/hash.js';
@@ -142,6 +144,10 @@ export const foldDay = async (
       // Categories are low-cardinality, so this cube keeps every one (no top-N): a category
       // total must be complete, not capped like the per-SKU cube.
       cells = foldOrderCategoriesDaily(facts);
+    } else if (cube === 'promotions-daily') {
+      cells = foldPromotionsDaily(facts);
+    } else if (cube === 'fulfilment-daily') {
+      cells = foldFulfilmentDaily(facts);
     } else {
       continue;
     }

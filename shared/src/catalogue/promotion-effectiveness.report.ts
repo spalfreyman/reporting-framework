@@ -114,8 +114,7 @@ export const promotionEffectiveness: ReportDefinitionInput = {
       "span": 12,
       "query": {
         "metrics": [
-          "discount.redemptions",
-          "orders.promoted@orderdate"
+          "discount.redemptions"
         ],
         "dimensions": [
           "discountCode"
@@ -144,10 +143,6 @@ export const promotionEffectiveness: ReportDefinitionInput = {
             },
             {
               "field": "discount.redemptions",
-              "from": "primary"
-            },
-            {
-              "field": "orders.promoted@orderdate",
               "from": "primary"
             }
           ]
