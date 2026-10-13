@@ -73,6 +73,12 @@ export interface OrderFact {
   businessDate: string;
   /** Dates money actually moved - refunds and captures bucket here, not on businessDate. */
   cashDates: string[];
+  /**
+   * Opaque, stable per-customer key (hashed id/email), or '' for a guest order. NOT a report
+   * dimension — it exists only so the cohort reducer can group a customer's orders across the
+   * whole history to find their first-order month. Hashed so no PII lands in the fact store.
+   */
+  customerKey?: string;
   dims: Record<string, string>;
   measures: Record<string, number>;
   items?: Array<{

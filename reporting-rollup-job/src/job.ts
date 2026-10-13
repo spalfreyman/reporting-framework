@@ -3,7 +3,7 @@ import { readConfiguration } from './env.js';
 import { createLogger } from './logger.js';
 import { getApiRoot, getCustomObjectPort, getOrderScanPort } from './client.js';
 import { getCategoryResolver } from './shared-node/category-resolver.js';
-import { foldDay } from './fold.js';
+import { foldDay, foldCohortSnapshot, COHORT_CUBE } from './fold.js';
 import {
   createBudget,
   loadCursor,
@@ -12,6 +12,7 @@ import {
   withJobLock,
 } from './shared/ct/index.js';
 import { CO } from './shared/schema/descriptor.js';
+import type { ByProjectKeyRequestBuilder } from '@commercetools/platform-sdk';
 import { orderFactContainerFor } from './shared/rollup/keying.js';
 import { applyLineCategories, toOrderFact, type OrderProjection } from './shared/rollup/order-mapping.js';
 import { ConcurrentModificationError } from './shared/ct/ports.js';
@@ -63,6 +64,36 @@ const writeOrderFact = async (
 const readEpoch = async (port: CustomObjectPort): Promise<number> => {
   const epoch = await port.get<{ restatementEpoch?: number }>(CO.config, CO.keys.epoch);
   return epoch?.value.restatementEpoch ?? 1;
+};
+
+/**
+ * Reads every per-order fact across all monthly containers, keyset-paginated by id. The cohort
+ * reducer needs the whole history at once (a customer's first-order month can be in any month),
+ * which the per-container port can't express, so this scans the `reporting.order-facts-*`
+ * container range directly. Bounded by the total order count, run only on a complete pass.
+ */
+const readAllOrderFacts = async (apiRoot: ByProjectKeyRequestBuilder): Promise<OrderFact[]> => {
+  const from = CO.orderFactsPrefix; // reporting.order-facts-
+  const to = `${CO.orderFactsPrefix.slice(0, -1)}.`; // reporting.order-facts.  ('-' < '.')
+  const facts: OrderFact[] = [];
+  let afterId = '';
+  for (;;) {
+    const where = [
+      `container >= "${from}"`,
+      `container < "${to}"`,
+      ...(afterId ? [`id > "${afterId}"`] : []),
+    ].join(' and ');
+    const res = await apiRoot
+      .customObjects()
+      .get({ queryArgs: { where, sort: 'id asc', limit: 500, withTotal: false } })
+      .execute();
+    const results = res.body.results as Array<{ id: string; value: OrderFact }>;
+    if (results.length === 0) break;
+    for (const obj of results) facts.push(obj.value);
+    afterId = results[results.length - 1].id;
+    if (results.length < 500) break;
+  }
+  return facts;
 };
 
 export const runJob = async (deps?: {
@@ -174,6 +205,20 @@ export const runJob = async (deps?: {
           log
         );
         daysFolded += 1;
+      }
+
+      // ── Rebuild the cohort snapshot (whole-history, not per-day) ────────────
+      // Only on a complete pass: a customer's first-order month is only known once every order
+      // has been folded, so a budget-truncated run would mislabel cohorts. Full rebuild each time.
+      if (scanComplete && cubes.includes(COHORT_CUBE) && !budget.exhausted()) {
+        const allFacts = await readAllOrderFacts(getApiRoot());
+        const result = await foldCohortSnapshot(
+          port,
+          allFacts,
+          { timezone: config.ROLLUP_TIMEZONE, restatementEpoch, now: now() },
+          log
+        );
+        log.info('cohort snapshot rebuilt', { rows: result.rows, facts: allFacts.length });
       }
 
       // Advance the watermark ONLY when the scan reached the end. That is what licenses the

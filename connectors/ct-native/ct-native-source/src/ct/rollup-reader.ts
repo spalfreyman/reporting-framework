@@ -136,6 +136,94 @@ const asFilterPredicate = (query: SourceQuery) => {
   return (cell: Record<string, string>) => include.every((test) => test(cell));
 };
 
+/**
+ * Cubes stored as a single whole-history SNAPSHOT (one fixed partition) rather than per-day.
+ * A cohort-retention matrix is all-history state, so it is read directly, ignoring the query's
+ * date range and never contributing a `date` column.
+ */
+const SNAPSHOT_CUBES = new Set(['customers-daily']);
+const SNAPSHOT_DAY = 'snapshot';
+
+/** Reads the fixed snapshot partition(s) for a snapshot cube and aggregates by the requested dims. */
+const readSnapshot = async (
+  port: CustomObjectPort,
+  query: SourceQuery,
+  cubes: string[]
+): Promise<RollupReadResult> => {
+  const matches = asFilterPredicate(query);
+  const groupBy = query.dimensions.filter((d) => d !== 'date');
+  const accumulator = new Map<string, { key: Record<string, string>; m: Record<string, number> }>();
+  const watermarks: string[] = [];
+  let partitionsRead = 0;
+
+  for (const cube of cubes) {
+    const container = cubeContainer(cube);
+    for (let shard = 0; ; shard += 1) {
+      const entry = await port.get<DayPartition>(container, dayPartitionKey(SNAPSHOT_DAY, shard));
+      if (!entry) break;
+      partitionsRead += 1;
+      watermarks.push(entry.value.meta.watermark);
+      for (const cell of entry.value.rows) {
+        if (!matches(cell.k)) continue;
+        const mapKey = groupBy.map((d) => cell.k[d] ?? '').join('|');
+        const existing = accumulator.get(mapKey);
+        const target =
+          existing ?? { key: Object.fromEntries(groupBy.map((d) => [d, cell.k[d] ?? ''])), m: {} };
+        for (const metricId of query.metrics) {
+          const measure = MEASURE_BY_METRIC[metricId];
+          if (!measure) continue;
+          const value = cell.m[measure];
+          if (value === null || value === undefined) continue;
+          const def = getMetric(metricId);
+          if (def?.kind === 'base' && !def.additive.overDimensions) {
+            target.m[metricId] = existing ? Number.NaN : value;
+            continue;
+          }
+          target.m[metricId] = (target.m[metricId] ?? 0) + value;
+        }
+        if (!existing) accumulator.set(mapKey, target);
+      }
+    }
+  }
+
+  const columns: ColumnMeta[] = [
+    ...groupBy.map((id) => ({
+      id,
+      role: 'dimension' as const,
+      valueType: 'string' as const,
+      exactness: 'exact' as const,
+      nullMeaning: 'unknown' as const,
+    })),
+    ...query.metrics.map((id) => {
+      const def = getMetric(id);
+      return {
+        id,
+        role: 'metric' as const,
+        valueType: def?.valueType ?? ('count' as const),
+        exactness: 'exact' as const,
+        nullMeaning: (def?.nullSemantics === 'null' ? 'unknown' : 'zero') as 'unknown' | 'zero',
+      };
+    }),
+  ];
+
+  const rows = [...accumulator.values()].map((entry) => [
+    ...groupBy.map((d) => entry.key[d] ?? null),
+    ...query.metrics.map((id) => {
+      const value = entry.m[id];
+      if (value === undefined) return null;
+      return Number.isNaN(value) ? null : value;
+    }),
+  ]);
+
+  return {
+    columns,
+    rows,
+    dataAsOf: watermarks.length > 0 ? watermarks.sort()[watermarks.length - 1] : null,
+    missingDays: [],
+    partitionsRead,
+  };
+};
+
 export const readRollup = async (
   port: CustomObjectPort,
   query: SourceQuery
@@ -147,6 +235,11 @@ export const readRollup = async (
   const includeDate = query.dimensions.includes('date') || query.grain !== null;
   // Cube choice depends on the grouping: an item-grain split reads the item cubes.
   const cubes = cubesFor(query.metrics, groupBy);
+
+  // Snapshot cubes (cohort retention) are whole-history, read from one fixed partition.
+  if (cubes.length > 0 && cubes.every((c) => SNAPSHOT_CUBES.has(c))) {
+    return readSnapshot(port, query, cubes);
+  }
 
   // Accumulate into a map keyed by (day, ...dimension values).
   const accumulator = new Map<string, { key: Record<string, string>; day: string; m: Record<string, number> }>();

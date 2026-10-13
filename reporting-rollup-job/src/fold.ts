@@ -10,6 +10,7 @@ import {
 } from './shared/rollup/keying.js';
 import {
   NONE,
+  foldCohort,
   foldFulfilmentDaily,
   foldOrderCategoriesDaily,
   foldOrderLinesDaily,
@@ -110,6 +111,44 @@ const writePartition = async (
   }
 
   return { cube, day, rows: cells.length, shards: shards.length, unchanged: false };
+};
+
+/**
+ * The partition "day" the cohort matrix is written under. The matrix is whole-history state, not
+ * a day's trade, so it lives in one fixed snapshot partition the reader points at directly rather
+ * than being spread across date partitions (which a range-scan would double-count).
+ */
+export const COHORT_SNAPSHOT_DAY = 'snapshot';
+export const COHORT_CUBE = 'customers-daily';
+
+/**
+ * Rebuilds the cohort-retention snapshot from the FULL order-fact history. Unlike foldDay this is
+ * not per-day: `allFacts` must be every order-fact, because a customer's cohort is their first
+ * order across all time. Writes one snapshot partition that the ct-native reader reads directly.
+ */
+export const foldCohortSnapshot = async (
+  port: CustomObjectPort,
+  allFacts: OrderFact[],
+  options: { timezone: string; restatementEpoch: number; now: Date },
+  log: Logger
+): Promise<FoldResult> => {
+  const cells = foldCohort(allFacts);
+  const result = await writePartition(
+    port,
+    COHORT_CUBE,
+    COHORT_SNAPSHOT_DAY,
+    options.timezone,
+    cells,
+    allFacts.length,
+    options.restatementEpoch,
+    options.now
+  );
+  log.debug('folded cohort snapshot', {
+    customers: new Set(allFacts.map((f) => f.customerKey).filter(Boolean)).size,
+    rows: result.rows,
+    unchanged: result.unchanged,
+  });
+  return result;
 };
 
 export const foldDay = async (

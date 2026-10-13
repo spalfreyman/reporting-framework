@@ -111,7 +111,10 @@ export const buildDescriptor = (options: DescriptorOptions = {}): DataSourceDesc
         materialized('customers.active@orderdate', ORDER_DIMENSIONS),
         materialized('orders.promoted@orderdate', [...ORDER_DIMENSIONS, 'discountCode']),
         materialized('discount.redemptions', ['date', 'discountCode', 'store', 'currency']),
-        materialized('customers.cohortSize', ['cohortMonth', 'store']),
+        // cohortSize carries periodIndex too: the snapshot repeats the cohort total on every
+        // period row so retention.rate (retained/cohortSize) can be grouped by (cohortMonth,
+        // periodIndex) in the heatmap.
+        materialized('customers.cohortSize', ['cohortMonth', 'periodIndex', 'store']),
         materialized('customers.retained', ['cohortMonth', 'periodIndex', 'store']),
         materialized('shipments.count', ['date', 'store', 'shippingMethod', 'carrier']),
         materialized('shipments.onTime', ['date', 'store', 'shippingMethod', 'carrier']),

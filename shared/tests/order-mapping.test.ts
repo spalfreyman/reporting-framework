@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyLineCategories,
   businessDateOf,
+  foldCohort,
   foldFulfilmentDaily,
   foldOrderCategoriesDaily,
   foldOrderLinesDaily,
@@ -10,6 +11,7 @@ import {
   toOrderFact,
 } from '../src/rollup/order-mapping.js';
 import type { OrderProjection } from '../src/rollup/order-mapping.js';
+import type { OrderFact } from '../src/rollup/keying.js';
 
 /**
  * The order -> fact mapping is the one place an order's worth is decided, shared by the
@@ -138,6 +140,61 @@ describe('fulfilment (order custom dispatch fields)', () => {
     expect(cells[0].k.carrier).toBe('DHL');
     expect(cells[0].m.shipments).toBe(1);
     expect(cells[0].m.shipmentsOnTime).toBe(1);
+  });
+});
+
+describe('customer key (cohort grouping identity)', () => {
+  it('hashes the customer identity onto the fact rather than storing raw PII', () => {
+    const withEmail = toOrderFact({ ...base, customerEmail: 'a@demo.example' }, 'UTC');
+    expect(withEmail.customerKey).toBeTruthy();
+    expect(withEmail.customerKey).not.toBe('a@demo.example'); // hashed, not the raw email
+  });
+
+  it('is stable for the same customer and differs across customers', () => {
+    const a1 = toOrderFact({ ...base, id: 'a1', customerEmail: 'a@demo.example' }, 'UTC');
+    const a2 = toOrderFact({ ...base, id: 'a2', customerEmail: 'a@demo.example' }, 'UTC');
+    const b = toOrderFact({ ...base, id: 'b', customerEmail: 'b@demo.example' }, 'UTC');
+    expect(a1.customerKey).toBe(a2.customerKey);
+    expect(a1.customerKey).not.toBe(b.customerKey);
+  });
+
+  it('is empty for a guest order (no id, no email)', () => {
+    expect(toOrderFact(base, 'UTC').customerKey).toBe('');
+  });
+});
+
+describe('foldCohort (retention matrix)', () => {
+  const fact = (customerKey: string, businessDate: string, store = '_none'): OrderFact =>
+    ({ customerKey, businessDate, dims: { store }, measures: {} }) as unknown as OrderFact;
+
+  it('assigns each customer to their first-order month and counts distinct retention per period', () => {
+    // A: active 2026-01 (first), 02, 03.  B: active 2026-01 (first), 03.  latest = 2026-03.
+    const cells = foldCohort([
+      fact('A', '2026-01-10'),
+      fact('A', '2026-02-05'),
+      fact('A', '2026-03-20'),
+      fact('B', '2026-01-15'),
+      fact('B', '2026-03-02'),
+    ]);
+    const byPeriod = Object.fromEntries(
+      cells
+        .filter((c) => c.k.cohortMonth === '2026-01')
+        .map((c) => [c.k.periodIndex, c.m])
+    );
+    expect(byPeriod['0']).toEqual({ cohortSize: 2, retained: 2 }); // both in cohort month
+    expect(byPeriod['1']).toEqual({ cohortSize: 2, retained: 1 }); // only A returned in Feb
+    expect(byPeriod['2']).toEqual({ cohortSize: 2, retained: 2 }); // both active in Mar
+  });
+
+  it('emits no cell for periods that have not elapsed yet (so retention.rate is blank, not 0)', () => {
+    // Single customer, first (and only) month 2026-03 which is also the latest → only period 0.
+    const cells = foldCohort([fact('A', '2026-03-10')]);
+    expect(cells.map((c) => c.k.periodIndex)).toEqual(['0']);
+    expect(cells[0].m).toEqual({ cohortSize: 1, retained: 1 });
+  });
+
+  it('ignores guest orders (no customer key)', () => {
+    expect(foldCohort([fact('', '2026-01-01')])).toEqual([]);
   });
 });
 

@@ -1,5 +1,6 @@
 import type { FactCell, OrderFact } from './keying.js';
 import { bucketDay } from '../util/date-range.js';
+import { stableHash } from '../util/hash.js';
 
 /**
  * Maps a commercetools order to rollup facts.
@@ -222,6 +223,11 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
   const measures = orderMeasures(order);
   const businessDate = businessDateOf(order, timezone);
 
+  // Opaque per-customer key for cohort grouping: the real customerId when present, else a hash
+  // of the email (guest orders), else '' — never the raw email, so no PII enters the fact store.
+  const customerRaw = order.customerId ?? order.customerEmail ?? '';
+  const customerKey = customerRaw ? stableHash(customerRaw) : '';
+
   // Promotion: the code applied (from the order custom field), if any.
   const promoCode = orderCustomField(order, 'promoCode') ?? NONE;
   const redemptions = promoCode !== NONE ? 1 : 0;
@@ -243,6 +249,7 @@ export const toOrderFact = (order: OrderProjection, timezone: string): OrderFact
     lastSequenceNumber: order.version,
     businessDate,
     cashDates: [businessDate],
+    customerKey,
     dims: {
       currency: measures.currency,
       store: order.store?.key ?? NONE,
@@ -427,4 +434,91 @@ export const foldFulfilmentDaily = (facts: OrderFact[]): FactCell[] => {
   }
 
   return [...byKey.values()];
+};
+
+/** Whole months between two YYYY-MM strings (b - a); negative if b precedes a. */
+const monthDiff = (a: string, b: string): number => {
+  const [ay, am] = a.split('-').map(Number);
+  const [by, bm] = b.split('-').map(Number);
+  return (by - ay) * 12 + (bm - am);
+};
+
+/** YYYY-MM that is `n` months after the YYYY-MM `start`. */
+const addMonths = (start: string, n: number): string => {
+  const [y, m] = start.split('-').map(Number);
+  const total = (y * 12 + (m - 1)) + n;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return `${ny}-${String(nm).padStart(2, '0')}`;
+};
+
+/**
+ * Reduces the FULL order-fact history into the cohort-retention matrix (the `customers-daily`
+ * snapshot cube). Unlike every other fold this is NOT per-day: cohort membership is a customer's
+ * FIRST order month across all time, and retention counts DISTINCT customers, so it must see a
+ * customer's whole history at once.
+ *
+ * Each customer is assigned to one cohort — (first-order month, first-order store) — and counted
+ * at most once per period, so summing cells over `store` can never double-count. A cell is emitted
+ * for every elapsed period (0..latest) with `cohortSize` (the cohort's distinct customers, the
+ * retention denominator, repeated on each row) and `retained` (distinct members active that
+ * period). No cell is emitted for a period that has not elapsed yet, so `retention.rate` is blank
+ * there rather than a misleading 0 — matching `customers.retained`'s null semantics.
+ */
+export const foldCohort = (facts: OrderFact[]): FactCell[] => {
+  interface Cust {
+    firstDate: string;
+    firstStore: string;
+    months: Set<string>;
+  }
+  const byCustomer = new Map<string, Cust>();
+  let latestMonth = '';
+
+  for (const fact of facts) {
+    const key = fact.customerKey;
+    if (!key) continue; // guest / unattributable order — not a cohort member
+    const month = fact.businessDate.slice(0, 7);
+    if (month > latestMonth) latestMonth = month;
+    const existing = byCustomer.get(key);
+    if (!existing) {
+      byCustomer.set(key, {
+        firstDate: fact.businessDate,
+        firstStore: fact.dims.store ?? NONE,
+        months: new Set([month]),
+      });
+    } else {
+      existing.months.add(month);
+      if (fact.businessDate < existing.firstDate) {
+        existing.firstDate = fact.businessDate;
+        existing.firstStore = fact.dims.store ?? NONE;
+      }
+    }
+  }
+
+  if (!latestMonth) return [];
+
+  // Group customers into cohorts keyed by (first-order month, first-order store).
+  const cohorts = new Map<string, { cohortMonth: string; store: string; members: Cust[] }>();
+  for (const cust of byCustomer.values()) {
+    const cohortMonth = cust.firstDate.slice(0, 7);
+    const mapKey = `${cohortMonth}\u0000${cust.firstStore}`;
+    const cohort = cohorts.get(mapKey) ?? { cohortMonth, store: cust.firstStore, members: [] };
+    cohort.members.push(cust);
+    cohorts.set(mapKey, cohort);
+  }
+
+  const cells: FactCell[] = [];
+  for (const { cohortMonth, store, members } of cohorts.values()) {
+    const cohortSize = members.length;
+    const maxPeriod = monthDiff(cohortMonth, latestMonth);
+    for (let period = 0; period <= maxPeriod; period += 1) {
+      const targetMonth = addMonths(cohortMonth, period);
+      const retained = members.reduce((n, m) => (m.months.has(targetMonth) ? n + 1 : n), 0);
+      cells.push({
+        k: { cohortMonth, periodIndex: String(period), store },
+        m: { cohortSize, retained },
+      });
+    }
+  }
+  return cells;
 };
