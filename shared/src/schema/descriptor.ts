@@ -29,6 +29,17 @@ export const metricCapabilitySchema = z.object({
   dimensions: z.array(z.string()),
   /** Metric-level override of the source-level date floor. */
   dateFloor: z.string().optional(),
+  /**
+   * Metric-level freshness overrides. A source that serves BOTH live and materialized metrics
+   * — ct-native is the canonical case: live Product Search facets alongside a lagged order
+   * rollup — cannot honestly describe its freshness with a single source-level number. When
+   * present, the planner uses these for THIS metric instead of `freshness.*`, so a live metric
+   * is not rejected for a near-real-time report just because the same source's rollup lags.
+   * Omitted metrics fall back to the source-level freshness, so existing descriptors are
+   * unaffected.
+   */
+  maxLagSeconds: z.number().int().nonnegative().optional(),
+  typicalLagSeconds: z.number().int().nonnegative().optional(),
   costClass: z.enum(['cheap', 'moderate', 'expensive']).default('cheap'),
   exactness: z.enum(['exact', 'sampled', 'estimated']).default('exact'),
 });

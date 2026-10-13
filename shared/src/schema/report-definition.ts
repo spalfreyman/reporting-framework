@@ -127,7 +127,7 @@ export const reportDefinitionSchema = z.object({
         multi: z.boolean().default(true),
         required: z.boolean().default(false),
         valueSource: z
-          .enum(['ct-stores', 'ct-channels', 'ct-categories', 'ct-customer-groups', 'static', 'dsp'])
+          .enum(['ct-products', 'ct-stores', 'ct-channels', 'ct-categories', 'ct-customer-groups', 'static', 'dsp'])
           .default('dsp'),
         staticValues: z.array(z.object({ value: z.string(), labelKey: z.string() })).default([]),
       })
