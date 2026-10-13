@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   applyLineCategories,
   businessDateOf,
+  foldFulfilmentDaily,
   foldOrderCategoriesDaily,
+  foldOrderLinesDaily,
   foldOrdersDaily,
+  foldPromotionsDaily,
   toOrderFact,
 } from '../src/rollup/order-mapping.js';
 import type { OrderProjection } from '../src/rollup/order-mapping.js';
@@ -39,6 +42,128 @@ describe('businessDate', () => {
   it('buckets the fact on the completedAt day', () => {
     const fact = toOrderFact({ ...base, completedAt: '2026-05-04T12:00:00.000Z' }, 'UTC');
     expect(fact.businessDate).toBe('2026-05-04');
+  });
+});
+
+describe('cost of goods (line price cost custom field)', () => {
+  const withCost = (unitCost: number): OrderProjection => ({
+    ...base,
+    lineItems: [
+      {
+        quantity: 2,
+        variant: { sku: 'SKU-1' },
+        totalPrice: { centAmount: 10000 },
+        category: 'c1',
+        price: {
+          value: { centAmount: 5000 },
+          custom: { customFieldsRaw: [{ name: 'cost', value: { type: 'centPrecision', currencyCode: 'EUR', centAmount: unitCost } }] },
+        },
+      },
+    ],
+  });
+
+  it('captures per-line cost = unit cost x quantity from the price cost custom field', () => {
+    const fact = toOrderFact(withCost(3000), 'UTC');
+    expect(fact.items?.[0].cost).toBe(6000); // 3000 x 2
+  });
+
+  it('defaults cost to 0 when the line carries no cost custom field', () => {
+    expect(toOrderFact(base, 'UTC').items?.[0].cost).toBe(0);
+  });
+
+  it('folds cost into the order-lines-daily and order-categories-daily cubes', () => {
+    const fact = toOrderFact(withCost(3000), 'UTC');
+    expect(foldOrderLinesDaily([fact])[0].m.cost).toBe(6000);
+    expect(foldOrderCategoriesDaily([fact])[0].m.cost).toBe(6000);
+  });
+});
+
+describe('promotions (order custom promoCode)', () => {
+  const promoted = (): OrderProjection => ({
+    ...base,
+    completedAt: '2026-09-10T10:00:00.000Z',
+    discountOnTotalPrice: { discountedAmount: { centAmount: 1500 } },
+    custom: { customFieldsRaw: [{ name: 'promoCode', value: 'WELCOME10' }] },
+  });
+
+  it('carries the promo code as a dimension and marks the order promoted with a redemption', () => {
+    const fact = toOrderFact(promoted(), 'UTC');
+    expect(fact.dims.discountCode).toBe('WELCOME10');
+    expect(fact.measures.redemptions).toBe(1);
+    expect(fact.measures.ordersPromoted).toBe(1);
+    expect(fact.measures.discount).toBe(1500);
+  });
+
+  it('folds redemptions into promotions-daily keyed by discount code, skipping un-promoted orders', () => {
+    const cells = foldPromotionsDaily([toOrderFact(promoted(), 'UTC'), toOrderFact(base, 'UTC')]);
+    expect(cells).toHaveLength(1);
+    expect(cells[0].k.discountCode).toBe('WELCOME10');
+    expect(cells[0].m.redemptions).toBe(1);
+  });
+});
+
+describe('fulfilment (order custom dispatch fields)', () => {
+  const shipped = (shippedAt: string): OrderProjection => ({
+    ...base,
+    completedAt: '2026-09-10T10:00:00.000Z',
+    custom: {
+      customFieldsRaw: [
+        { name: 'shippedAt', value: shippedAt },
+        { name: 'carrier', value: 'DHL' },
+        { name: 'shippingMethod', value: 'Express' },
+      ],
+    },
+  });
+
+  it('counts a shipment and marks on-time within the 2-day SLA', () => {
+    const fact = toOrderFact(shipped('2026-09-11T08:00:00.000Z'), 'UTC'); // +1 day
+    expect(fact.measures.shipments).toBe(1);
+    expect(fact.measures.shipmentsOnTime).toBe(1);
+    expect(fact.dims.shippingMethod).toBe('Express');
+  });
+
+  it('counts a late shipment but not on-time beyond the SLA', () => {
+    const fact = toOrderFact(shipped('2026-09-15T08:00:00.000Z'), 'UTC'); // +5 days
+    expect(fact.measures.shipments).toBe(1);
+    expect(fact.measures.shipmentsOnTime).toBe(0);
+  });
+
+  it('folds shipments into fulfilment-daily by shipping method, skipping un-shipped orders', () => {
+    const cells = foldFulfilmentDaily([
+      toOrderFact(shipped('2026-09-11T08:00:00.000Z'), 'UTC'),
+      toOrderFact(base, 'UTC'),
+    ]);
+    expect(cells).toHaveLength(1);
+    expect(cells[0].k.shippingMethod).toBe('Express');
+    expect(cells[0].k.carrier).toBe('DHL');
+    expect(cells[0].m.shipments).toBe(1);
+    expect(cells[0].m.shipmentsOnTime).toBe(1);
+  });
+});
+
+describe('order state and refunds', () => {
+  it('carries paymentState as a fact dimension, defaulting to _none', () => {
+    expect(toOrderFact(base, 'UTC').dims.paymentState).toBe('_none');
+    expect(toOrderFact({ ...base, paymentState: 'Paid' }, 'UTC').dims.paymentState).toBe('Paid');
+  });
+
+  it('treats a CreditOwed order as fully refunded, without unbooking the sale', () => {
+    // net = gross/1.19 of 10000 = 8403. The sale still books; the refund lands in refunds.
+    const fact = toOrderFact({ ...base, paymentState: 'CreditOwed' }, 'UTC');
+    expect(fact.measures.refunds).toBe(fact.measures.revenueNet);
+    expect(fact.measures.revenueNet).toBeGreaterThan(0);
+  });
+
+  it('a Paid order has zero refunds', () => {
+    expect(toOrderFact({ ...base, paymentState: 'Paid' }, 'UTC').measures.refunds).toBe(0);
+  });
+
+  it('folds orders of the same currency but different payment state into separate cells', () => {
+    const cells = foldOrdersDaily([
+      toOrderFact({ ...base, id: 'a', paymentState: 'Paid' }, 'UTC'),
+      toOrderFact({ ...base, id: 'b', paymentState: 'CreditOwed' }, 'UTC'),
+    ]);
+    expect(cells.map((c) => c.k.paymentState).sort()).toEqual(['CreditOwed', 'Paid']);
   });
 });
 

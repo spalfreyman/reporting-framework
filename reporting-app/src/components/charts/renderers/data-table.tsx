@@ -13,7 +13,13 @@ import type { ColumnMeta } from '../../../shared/schema/query';
  * Column order follows the spec when one is given, so a report author controls it; otherwise
  * it falls back to the result set's own order.
  */
-const TableRenderer = ({ spec, columns, rows }: RendererProps) => {
+const TableRenderer = ({
+  spec,
+  columns,
+  rows,
+  rawRows,
+  labelContext,
+}: RendererProps) => {
   const requested = spec.encoding.columns?.map((c) => c.field);
   const ordered = requested
     ? requested
@@ -21,11 +27,16 @@ const TableRenderer = ({ spec, columns, rows }: RendererProps) => {
         .filter((c): c is ColumnMeta => Boolean(c))
     : columns;
 
+  // When a label context is available, render from the RAW rows so dimension cells can resolve
+  // to names and deep links; otherwise fall back to the pre-labelled rows as plain text.
+  const tableRows = labelContext && rawRows ? rawRows : rows;
+
   return (
     <ResultSetTable
       columns={ordered}
-      rows={rows}
+      rows={tableRows}
       maxRows={spec.options?.pageSize ?? 50}
+      {...(labelContext ? { labelContext } : {})}
     />
   );
 };

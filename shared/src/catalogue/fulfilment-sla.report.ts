@@ -18,6 +18,7 @@ export const fulfilmentSla: ReportDefinitionInput = {
       "shipments.onTime"
     ],
     "sourceKinds": [
+      "commerce",
       "oms",
       "erp"
     ],
@@ -44,7 +45,7 @@ export const fulfilmentSla: ReportDefinitionInput = {
   },
   "allowedFilters": [
     {
-      "dimension": "warehouse",
+      "dimension": "shippingMethod",
       "ops": [
         "in"
       ],

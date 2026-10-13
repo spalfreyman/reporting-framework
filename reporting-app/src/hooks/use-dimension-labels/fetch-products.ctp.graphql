@@ -1,0 +1,21 @@
+query FetchProductsForLabels {
+  products(limit: 500) {
+    results {
+      id
+      masterData {
+        current {
+          nameAllLocales {
+            locale
+            value
+          }
+          masterVariant {
+            sku
+          }
+          variants {
+            sku
+          }
+        }
+      }
+    }
+  }
+}

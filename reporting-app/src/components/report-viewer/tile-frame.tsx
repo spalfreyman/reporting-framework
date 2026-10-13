@@ -12,12 +12,18 @@ import { loadRenderer } from '../charts/registry';
 import type { Renderer } from '../charts/types';
 import commonMessages from '../common/messages';
 import { reportMessages } from '../../i18n/messages/shared';
+import type { TableLabelContext } from '../../hooks/use-dimension-labels';
 import type { Tile } from '../../shared/schema/report-definition';
 import type { TileResult } from '../../types/reporting';
 
 type Props = {
   tile: Tile;
+  /** The labelled result: dimension cells resolved to names, for the chart renderers. */
   result?: TileResult;
+  /** The raw result (canonical keys), for the table — so cells can deep-link to entities. */
+  rawResult?: TileResult;
+  /** Label/link resolution context passed through to the table. */
+  labelContext?: TableLabelContext;
   loading: boolean;
   title: string;
 };
@@ -30,8 +36,20 @@ type Props = {
  * canvas, which assistive technology cannot read — so it is part of the frame rather than
  * something each renderer has to remember.
  */
-const TileFrame = ({ tile, result, loading, title }: Props) => {
+const TileFrame = ({
+  tile,
+  result,
+  rawResult,
+  labelContext,
+  loading,
+  title,
+}: Props) => {
   const intl = useIntl();
+
+  // The table always renders from raw rows (canonical keys) so dimension cells can resolve to
+  // names and deep links; charts keep using the pre-labelled `result`.
+  const tableRows = (rawResult ?? result)?.rows ?? [];
+  const tableProps = labelContext ? { labelContext } : {};
   const [renderer, setRenderer] = useState<Renderer | null>(null);
   const [rendererMissing, setRendererMissing] = useState(false);
   const [showTable, setShowTable] = useState(false);
@@ -95,7 +113,13 @@ const TileFrame = ({ tile, result, loading, title }: Props) => {
     if (rendererMissing) {
       // Fall back to the data rather than an empty box: a missing renderer must not hide
       // figures the gateway already fetched.
-      return <ResultSetTable columns={result.columns} rows={result.rows} />;
+      return (
+        <ResultSetTable
+          columns={result.columns}
+          rows={tableRows}
+          {...tableProps}
+        />
+      );
     }
 
     if (!renderer) return <LoadingSpinner scale="s" />;
@@ -107,13 +131,23 @@ const TileFrame = ({ tile, result, loading, title }: Props) => {
           <ContentNotification type="warning">
             {problems.map((p) => p.message).join(' ')}
           </ContentNotification>
-          <ResultSetTable columns={result.columns} rows={result.rows} />
+          <ResultSetTable
+            columns={result.columns}
+            rows={tableRows}
+            {...tableProps}
+          />
         </Spacings.Stack>
       );
     }
 
     if (showTable) {
-      return <ResultSetTable columns={result.columns} rows={result.rows} />;
+      return (
+        <ResultSetTable
+          columns={result.columns}
+          rows={tableRows}
+          {...tableProps}
+        />
+      );
     }
 
     const { Component } = renderer;
@@ -124,6 +158,8 @@ const TileFrame = ({ tile, result, loading, title }: Props) => {
         rows={result.rows}
         totals={result.totals}
         {...(result.comparison ? { comparison: result.comparison } : {})}
+        {...(rawResult ? { rawRows: rawResult.rows } : {})}
+        {...tableProps}
         height={tile.chart.type === 'kpi' ? 0 : 280}
       />
     );

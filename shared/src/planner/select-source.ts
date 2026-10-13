@@ -139,13 +139,16 @@ export const candidatesFor = (
       continue;
     }
 
+    // A metric-level override wins over the source-level number: a source that serves both
+    // live and materialized metrics advertises each one's true lag (see MetricCapability).
+    const effectiveMaxLag = capability.maxLagSeconds ?? source.freshness.maxLagSeconds;
     if (
       ctx.maxAcceptableLagSeconds !== undefined &&
-      source.freshness.maxLagSeconds > ctx.maxAcceptableLagSeconds
+      effectiveMaxLag > ctx.maxAcceptableLagSeconds
     ) {
       rejected.push({
         sourceId: source.sourceId,
-        reason: `max lag ${source.freshness.maxLagSeconds}s exceeds the report's ${ctx.maxAcceptableLagSeconds}s`,
+        reason: `max lag ${effectiveMaxLag}s exceeds the report's ${ctx.maxAcceptableLagSeconds}s`,
       });
       continue;
     }
@@ -189,8 +192,10 @@ const compareCandidates =
     // 5. Native grain fit beats needing a roll-up.
     if (a.needsRollUp !== b.needsRollUp) return a.needsRollUp ? 1 : -1;
 
-    // 6. Freshness.
-    const lag = a.source.freshness.typicalLagSeconds - b.source.freshness.typicalLagSeconds;
+    // 6. Freshness (metric-level typical lag wins over the source-level number).
+    const aLag = a.capability.typicalLagSeconds ?? a.source.freshness.typicalLagSeconds;
+    const bLag = b.capability.typicalLagSeconds ?? b.source.freshness.typicalLagSeconds;
+    const lag = aLag - bLag;
     if (lag !== 0) return lag;
 
     // 7. Cost class, then live quota headroom.

@@ -1,0 +1,9 @@
+query FetchCustomerGroupsForLabels {
+  customerGroups(limit: 500) {
+    results {
+      id
+      key
+      name
+    }
+  }
+}

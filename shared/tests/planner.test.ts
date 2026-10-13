@@ -329,6 +329,48 @@ describe('source selection', () => {
     });
     expect(assignments[0].sourceId).toBe('warehouse');
   });
+
+  it('judges a metric by its own freshness override, not the source-level lag', () => {
+    // ct-native serves live catalogue facets (current) alongside a lagged order rollup. A
+    // near-real-time report (<=300s) must accept the live metric yet still reject the lagged one.
+    const ctNative = descriptor({
+      sourceId: 'ct-native',
+      capabilities: {
+        ...baseCaps,
+        metrics: [
+          metricCap('products.count', {
+            execution: 'live',
+            grains: [],
+            maxLagSeconds: 60,
+            typicalLagSeconds: 0,
+          }),
+          metricCap('orders.count@orderdate'), // no override -> inherits source-level maxLag
+        ],
+      },
+      // Source-level lag describes the rollup: far beyond the report's 300s tolerance.
+      freshness: { ...descriptor({ sourceId: 'x' }).freshness, maxLagSeconds: 3600 },
+    });
+
+    const base = {
+      dimensions: [],
+      range: { from: '2026-08-20', to: '2026-08-20' },
+      today: '2026-08-20',
+      maxAcceptableLagSeconds: 300,
+    };
+
+    // Live metric is point-in-time (no grain); its own 60s override clears the 300s bar.
+    const live = selectSources([ctNative], { ...base, grain: null, metrics: ['products.count'] });
+    expect(live.assignments[0].sourceId).toBe('ct-native');
+
+    // The lagged order metric inherits the 3600s source-level lag and is still rejected.
+    const lagged = selectSources([ctNative], {
+      ...base,
+      grain: 'day',
+      metrics: ['orders.count@orderdate'],
+    });
+    expect(lagged.assignments[0].sourceId).toBeNull();
+    expect(lagged.assignments[0].rejected[0].reason).toMatch(/max lag 3600s exceeds the report's 300s/);
+  });
 });
 
 // ── Merge ───────────────────────────────────────────────────────────────────────

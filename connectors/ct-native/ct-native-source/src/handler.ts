@@ -13,6 +13,8 @@ import {
 } from './shared/demo/generator.js';
 import { readRollup } from './ct/rollup-reader.js';
 import { readLiveFacets } from './ct/live-facets.js';
+import { readInventory } from './ct/inventory.js';
+import { getCategoryResolver } from './shared-node/category-resolver.js';
 import { readConfiguration } from './env.js';
 
 /**
@@ -55,6 +57,39 @@ export const createQueryHandler =
           `order metrics (${materializedRequested.join(', ')}) in one query: a point-in-time ` +
           `snapshot and a time series have no common answer.`
       );
+    }
+
+    // ── Live stock path (InventoryEntry, not Product Search) ────────────────────
+    // inventory.available reads the core InventoryEntry API, which needs no Product Search
+    // and gives a per-location, per-SKU position, so it is served even where the catalogue
+    // facets are not. It cannot share a query with the facet metrics (different API, different
+    // grain), so handle it exclusively before the facet path.
+    const wantsInventory = liveRequested.includes('inventory.available');
+    if (wantsInventory) {
+      if (liveRequested.length > 1) {
+        throw new DspFailure(
+          'UNSUPPORTED_METRIC',
+          'inventory.available (live stock) cannot be combined with catalogue facet metrics ' +
+            `(${liveRequested.filter((m) => m !== 'inventory.available').join(', ')}) in one ` +
+            'query: they come from different APIs and have no common breakdown.'
+        );
+      }
+      if (config.MODE === 'demo') {
+        return demoCatalogue(query, descriptor, now());
+      }
+      const resolver = await getCategoryResolver(deps.apiRoot());
+      const stock = await readInventory(deps.apiRoot(), query, resolver);
+      return buildResultSet({
+        descriptor,
+        columns: stock.columns,
+        rows: stock.rows,
+        execution: 'live',
+        dataAsOf: now().toISOString(),
+        grainServed: null,
+        partial: stock.partial,
+        upstreamRequests: stock.upstreamRequests,
+        ttlSeconds: config.CACHE_TTL_SECONDS,
+      });
     }
 
     // ── Live catalogue path ───────────────────────────────────────────────────

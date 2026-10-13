@@ -287,3 +287,22 @@ endDate — now endDate = to − 1 day. post-deploy probe was using a zero-width
 
 Reminder: MP only accepts events <72h old, so GA4 history grows from the live loop, not the
 90-day order backfill. Full gate: 227 tests across 11 packages, green.
+
+
+## Environment gotchas (2026-09-02)
+
+- **Zscaler TLS interception**: this network MITMs google-analytics.com (cert issuer
+  "Zscaler Intermediate Root CA"). Node rejects it (UNABLE_TO_GET_ISSUER_CERT_LOCALLY) while
+  curl trusts it via the macOS keychain. Fix, no TLS disabled: tools/event-generator has a
+  gitignored corp-ca.pem (the Zscaler root, extracted with `security find-certificate -a -c
+  Zscaler -p`) and a with-ca.sh wrapper the npm scripts use, which sets NODE_EXTRA_CA_CERTS
+  when that file is present (no-op otherwise). The GA4 connector's Data API host was NOT
+  intercepted, but boot it with NODE_EXTRA_CA_CERTS=<corp-ca.pem> if it ever is. On a
+  non-Zscaler network, delete corp-ca.pem.
+- **`node --import tsx` is unreliable here** (node version drift picks a node without
+  --import). Use `npx tsx` / the npm scripts instead.
+- **rollup-job is now an HTTP server**, not run-to-exit: trigger a fold by POSTing to
+  `http://localhost:8083/rollup-job` (start it with `node dist/src/index.js` first). Set
+  `ROLLUP_SAFE_LAG_SECONDS=0` in its env for an immediate fold of just-created orders.
+- ~876 SIM- test orders accumulated in sp-demo across runs; `cd tools/event-generator &&
+  npm run cleanup` removes them all.

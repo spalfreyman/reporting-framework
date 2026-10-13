@@ -11,6 +11,7 @@ import { ContentNotification } from '@commercetools-uikit/notifications';
 import { useGatewayFetch } from '../../hooks/use-gateway-fetch';
 import { useReportQuery } from '../../hooks/use-report-query';
 import { useReportFilters, toRequest } from '../../hooks/use-report-filters';
+import { useDimensionLabels } from '../../hooks/use-dimension-labels';
 import { reportMessages } from '../../i18n/messages/shared';
 import { labelForMetric } from '../common/format-metric';
 import FilterBar from './filter-bar';
@@ -65,6 +66,14 @@ const ReportViewer = () => {
 
   const { data, loading, error, refetch } = useReportQuery(reportId, request);
 
+  /**
+   * Presentation-only: turn dimension VALUES (canonical keys/ids the gateway returns by
+   * design) into localized CT resource names. Applied to the tile results below, so every
+   * renderer — tables, chart axes, legends and tooltips alike — shows names, while the
+   * filter/query model keeps the raw keys.
+   */
+  const { labelizeResult, ctx, projectKey } = useDimensionLabels(report);
+
   const titleOf = (): string => {
     if (!report) return reportId ?? '';
     if (report.titleKey) {
@@ -114,8 +123,14 @@ const ReportViewer = () => {
   }
 
   const resultByTile = new Map(
+    (data?.tiles ?? []).map((tile) => [tile.tileId, labelizeResult(tile)])
+  );
+  // Keep the RAW (un-labelled) tile results too: the table renders from these so its dimension
+  // cells can resolve both a name and a deep link from the canonical key.
+  const rawResultByTile = new Map(
     (data?.tiles ?? []).map((tile) => [tile.tileId, tile])
   );
+  const labelContext = { ctx, projectKey };
 
   return (
     <PageContentFull>
@@ -204,6 +219,10 @@ const ReportViewer = () => {
                     {...(resultByTile.get(tileId)
                       ? { result: resultByTile.get(tileId) }
                       : {})}
+                    {...(rawResultByTile.get(tileId)
+                      ? { rawResult: rawResultByTile.get(tileId) }
+                      : {})}
+                    labelContext={labelContext}
                     loading={loading}
                     title={tileTitle(tileId)}
                   />

@@ -194,8 +194,7 @@ export const marginErosion: ReportDefinitionInput = {
       "query": {
         "metrics": [
           "revenue.net@orderdate",
-          "margin.rate@orderdate",
-          "discount.rate@orderdate"
+          "margin.rate@orderdate"
         ],
         "dimensions": [
           "category"
@@ -219,10 +218,6 @@ export const marginErosion: ReportDefinitionInput = {
             },
             {
               "field": "revenue.net@orderdate",
-              "from": "primary"
-            },
-            {
-              "field": "discount.rate@orderdate",
               "from": "primary"
             },
             {

@@ -350,6 +350,10 @@ export const dimensionMessages = defineMessages({
     id: 'Reporting.dimension.warehouse',
     defaultMessage: 'Warehouse',
   },
+  'dimension.supplyChannel': {
+    id: 'Reporting.dimension.supplyChannel',
+    defaultMessage: 'Stock location',
+  },
   'dimension.supplier': {
     id: 'Reporting.dimension.supplier',
     defaultMessage: 'Supplier',
@@ -357,6 +361,25 @@ export const dimensionMessages = defineMessages({
   'dimension.carrier': {
     id: 'Reporting.dimension.carrier',
     defaultMessage: 'Carrier',
+  },
+});
+
+/**
+ * Labels for the sentinel dimension VALUES the rollup emits, and for the per-source
+ * "none" bucket. These are display-only: the underlying row value stays the raw sentinel.
+ */
+export const dimensionValueMessages = defineMessages({
+  'dimensionValue.none': {
+    id: 'Reporting.dimensionValue.none',
+    defaultMessage: 'None',
+  },
+  'dimensionValue.uncategorised': {
+    id: 'Reporting.dimensionValue.uncategorised',
+    defaultMessage: 'Uncategorised',
+  },
+  'dimensionValue.other': {
+    id: 'Reporting.dimensionValue.other',
+    defaultMessage: 'Other',
   },
 });
 
@@ -588,9 +611,13 @@ export const reportMessages = defineMessages({
     id: 'Reporting.report.stockCover.byWarehouse',
     defaultMessage: 'Stock by warehouse & product',
   },
+  'report.stockCover.byLocation': {
+    id: 'Reporting.report.stockCover.byLocation',
+    defaultMessage: 'Stock by location & product',
+  },
   'report.stockCover.description': {
     id: 'Reporting.report.stockCover.description',
-    defaultMessage: 'On-hand stock and weeks of cover by warehouse.',
+    defaultMessage: 'Available stock by location and product, read live from commercetools inventory.',
   },
   'report.stockCover.title': {
     id: 'Reporting.report.stockCover.title',

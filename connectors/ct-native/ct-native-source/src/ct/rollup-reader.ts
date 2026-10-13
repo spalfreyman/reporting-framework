@@ -28,6 +28,7 @@ const CUBE_BY_METRIC: Record<string, string> = {
   'customers.active@orderdate': 'orders-daily',
   'orders.promoted@orderdate': 'orders-daily',
   'units.sold@orderdate': 'order-lines-daily',
+  'cost.goods@orderdate': 'order-lines-daily',
   'returns.units@orderdate': 'returns-daily',
   'discount.redemptions': 'promotions-daily',
   'customers.cohortSize': 'customers-daily',
@@ -51,6 +52,7 @@ const MEASURE_BY_METRIC: Record<string, string> = {
   'customers.active@orderdate': 'customersActive',
   'orders.promoted@orderdate': 'ordersPromoted',
   'units.sold@orderdate': 'units',
+  'cost.goods@orderdate': 'cost',
   'returns.units@orderdate': 'returnsUnits',
   'discount.redemptions': 'redemptions',
   'customers.cohortSize': 'cohortSize',
@@ -71,6 +73,7 @@ const MEASURE_BY_METRIC: Record<string, string> = {
 const ITEM_METRIC_CUBE: Record<string, { product: string; category: string }> = {
   'revenue.net@orderdate': { product: 'order-lines-daily', category: 'order-categories-daily' },
   'units.sold@orderdate': { product: 'order-lines-daily', category: 'order-categories-daily' },
+  'cost.goods@orderdate': { product: 'order-lines-daily', category: 'order-categories-daily' },
 };
 
 export const cubesFor = (metrics: string[], groupBy: string[] = []): string[] => {

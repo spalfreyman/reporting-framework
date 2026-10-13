@@ -1,0 +1,12 @@
+query FetchStoresForLabels {
+  stores(limit: 500) {
+    results {
+      id
+      key
+      nameAllLocales {
+        locale
+        value
+      }
+    }
+  }
+}

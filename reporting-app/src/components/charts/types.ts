@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { ChartSpec, ChartType } from '../../shared/schema/chart-spec';
 import type { ColumnMeta, DateRange } from '../../shared/schema/query';
+import type { TableLabelContext } from '../../hooks/use-dimension-labels';
 import type { Cell, Row } from '../../types/reporting';
 
 /**
@@ -34,6 +35,13 @@ export type RendererProps = {
   comparison?: { range: DateRange; rows: Row[]; totals: Record<string, Cell> };
   height: number;
   onDrilldown?: (dimensionValues: Record<string, string>) => void;
+  /**
+   * RAW rows (canonical keys, not labelled) for renderers that resolve their own display and
+   * deep links — the table renderer. Charts use the pre-labelled `rows` instead.
+   */
+  rawRows?: Row[];
+  /** Label/link resolution context for the table renderer. */
+  labelContext?: TableLabelContext;
 };
 
 export type SpecProblem = { code: string; message: string };
