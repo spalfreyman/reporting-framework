@@ -243,17 +243,46 @@ export const planTile = (
     }
   }
 
-  // ── Sub-queries, one per chosen source ────────────────────────────────────
+  // ── Sub-queries, one per (chosen source, execution mode) ───────────────────
+  // A source can advertise both LIVE (point-in-time, no time range) and MATERIALIZED
+  // (time-bucketed) metrics. A source cannot answer both in one query — they have no common
+  // grain — so when a tile mixes them, split per execution mode: the live sub-query runs
+  // point-in-time, the materialized one over the range, and the merge layer FULL OUTER joins
+  // them on the shared dimensions. (When a source serves a single mode, this collapses to one
+  // sub-query, exactly as before.)
   const filters = [...ctx.filters, ...tile.query.filters];
-  const subQueries: SubQuery[] = chosenSourceIds.map((sourceId) => ({
-    sourceId,
-    metrics: assignments.filter((a) => a.sourceId === sourceId).map((a) => a.metric),
-    dimensions,
-    grain: effectivePointInTime ? null : (join.effectiveGrain ?? grain),
-    filters,
-    scope: ctx.access.rowScope,
-    pointInTime: effectivePointInTime,
-  }));
+  const executionOf = (sourceId: string, metric: string): 'live' | 'materialized' =>
+    chosenSources
+      .find((s) => s.sourceId === sourceId)
+      ?.capabilities.metrics.find((m) => m.metricId === metric)?.execution ?? 'materialized';
+
+  const subQueryGroups = new Map<
+    string,
+    { sourceId: string; execution: 'live' | 'materialized'; metrics: string[] }
+  >();
+  for (const a of assignments) {
+    if (!a.sourceId) continue;
+    const execution = executionOf(a.sourceId, a.metric);
+    const key = `${a.sourceId}\u0000${execution}`;
+    const group = subQueryGroups.get(key) ?? { sourceId: a.sourceId, execution, metrics: [] };
+    group.metrics.push(a.metric);
+    subQueryGroups.set(key, group);
+  }
+
+  const subQueries: SubQuery[] = [...subQueryGroups.values()].map((group) => {
+    const live = group.execution === 'live';
+    return {
+      sourceId: group.sourceId,
+      metrics: group.metrics,
+      dimensions,
+      // A live sub-query is always point-in-time (no time range); a materialized one honours the
+      // tile's own point-in-time flag and the join's effective grain.
+      grain: live || effectivePointInTime ? null : (join.effectiveGrain ?? grain),
+      filters,
+      scope: ctx.access.rowScope,
+      pointInTime: live || effectivePointInTime === true,
+    };
+  });
 
   // A tile is renderable only if at least one metric it actually DISPLAYS can be served.
   // Checking `subQueries.length > 0` alone is not enough: a tile showing only a derived

@@ -149,6 +149,10 @@ export const metricMessages = defineMessages({
     id: 'Reporting.metric.discountRedemptions',
     defaultMessage: 'Redemptions',
   },
+  'metric.promotionsActive': {
+    id: 'Reporting.metric.promotionsActive',
+    defaultMessage: 'Active',
+  },
   'metric.ordersWithPromotion': {
     id: 'Reporting.metric.ordersWithPromotion',
     defaultMessage: 'Promoted orders',

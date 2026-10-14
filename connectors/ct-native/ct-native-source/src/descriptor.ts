@@ -126,6 +126,11 @@ export const buildDescriptor = (options: DescriptorOptions = {}): DataSourceDesc
         // channel can belong to several stores and a store breakdown would double-count stock.
         live('inventory.available', ['category', 'product', 'supplyChannel']),
 
+        // ── Live promotions, from the CartDiscount / DiscountCode API ─────────
+        // Served from the core discount APIs (no Product Search), so promotion-effectiveness can
+        // list every active promotion keyed by discountCode and outer-join it with redemptions.
+        live('promotions.active', ['discountCode', 'store', 'currency']),
+
         // ── Live catalogue, from Product Search facets ───────────────────────
         // Advertised only when Product Search is actually available on the project.
         ...(liveCatalogue

@@ -15,7 +15,8 @@ export const promotionEffectiveness: ReportDefinitionInput = {
   "requiredCapabilities": {
     "metrics": [
       "orders.promoted@orderdate",
-      "discount.redemptions"
+      "discount.redemptions",
+      "promotions.active"
     ],
     "sourceKinds": [
       "commerce"
@@ -114,17 +115,13 @@ export const promotionEffectiveness: ReportDefinitionInput = {
       "span": 12,
       "query": {
         "metrics": [
+          "promotions.active",
           "discount.redemptions"
         ],
         "dimensions": [
           "discountCode"
         ],
         "comparison": "none",
-        "topN": {
-          "by": "discount.redemptions",
-          "n": 25,
-          "otherBucket": false
-        },
         "orderBy": [
           {
             "column": "discount.redemptions",
@@ -139,6 +136,10 @@ export const promotionEffectiveness: ReportDefinitionInput = {
           "columns": [
             {
               "field": "discountCode",
+              "from": "primary"
+            },
+            {
+              "field": "promotions.active",
               "from": "primary"
             },
             {

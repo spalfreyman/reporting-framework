@@ -14,6 +14,7 @@ import {
 import { readRollup } from './ct/rollup-reader.js';
 import { readLiveFacets } from './ct/live-facets.js';
 import { readInventory } from './ct/inventory.js';
+import { readLivePromotions } from './ct/live-promotions.js';
 import { getCategoryResolver } from './shared-node/category-resolver.js';
 import { readConfiguration } from './env.js';
 
@@ -33,6 +34,7 @@ const LIVE_METRICS = new Set([
   'price.max',
   'price.mean',
   'inventory.available',
+  'promotions.active',
 ]);
 
 export interface HandlerDeps {
@@ -88,6 +90,33 @@ export const createQueryHandler =
         grainServed: null,
         partial: stock.partial,
         upstreamRequests: stock.upstreamRequests,
+        ttlSeconds: config.CACHE_TTL_SECONDS,
+      });
+    }
+
+    // ── Live promotions path (DiscountCode API, not Product Search) ─────────────
+    const wantsPromotions = liveRequested.includes('promotions.active');
+    if (wantsPromotions) {
+      if (liveRequested.length > 1) {
+        throw new DspFailure(
+          'UNSUPPORTED_METRIC',
+          'promotions.active (live promotions) cannot be combined with other live metrics in one ' +
+            'query: it comes from the DiscountCode API and has no common breakdown.'
+        );
+      }
+      if (config.MODE === 'demo') {
+        return demoCatalogue(query, descriptor, now());
+      }
+      const promos = await readLivePromotions(deps.apiRoot(), query);
+      return buildResultSet({
+        descriptor,
+        columns: promos.columns,
+        rows: promos.rows,
+        execution: 'live',
+        dataAsOf: now().toISOString(),
+        grainServed: null,
+        partial: promos.partial,
+        upstreamRequests: promos.upstreamRequests,
         ttlSeconds: config.CACHE_TTL_SECONDS,
       });
     }

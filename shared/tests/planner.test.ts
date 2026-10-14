@@ -4,6 +4,8 @@ import type { ResultSet } from '../src/schema/query.js';
 import { planJoin } from '../src/planner/conformance.js';
 import { mergeResults } from '../src/planner/merge.js';
 import { selectSources } from '../src/planner/select-source.js';
+import { planTile, type PlanContext } from '../src/planner/plan.js';
+import type { EffectiveAccess } from '../src/framing/access.js';
 import { cacheKey, decideTtl } from '../src/planner/cache-key.js';
 import { resolveMetrics } from '../src/semantic/resolve.js';
 import type { DerivedMetric } from '../src/semantic/types.js';
@@ -705,5 +707,100 @@ describe('sealed/hot TTL', () => {
     );
     expect(decision.fullySealed).toBe(false);
     expect(decision.ttlSeconds).toBe(300);
+  });
+});
+
+// ── Sub-query split by execution mode (live promotions + materialized redemptions) ──
+
+describe('sub-query split by execution mode', () => {
+  const allAccess: EffectiveAccess = {
+    subject: { type: 'user', id: 'test' } as unknown as EffectiveAccess['subject'],
+    allowedReports: 'all',
+    deniedReports: new Set(),
+    metrics: 'all',
+    dimensions: 'all',
+    sources: 'all',
+    deniedMetrics: new Set(),
+    deniedDimensions: new Set(),
+    sensitivities: new Set(),
+    explicitMetrics: new Set(),
+    rowScope: { unrestricted: true },
+    redactions: new Map(),
+    minAggregation: new Map(),
+    unrestricted: true,
+    hash: 'test',
+  };
+
+  const source = descriptor({
+    sourceId: 'ct-native',
+    capabilities: {
+      ...descriptor({ sourceId: 'x' }).capabilities,
+      dimensions: [{ dimensionId: 'discountCode', filterable: true }],
+      grains: ['day', 'week', 'month'],
+      timezone: 'UTC',
+      maxRowsPerResponse: 10000,
+      supportsPagination: false,
+      supportsCompare: false,
+      supportsDimensionValues: false,
+      requiresFilters: [],
+      metrics: [
+        metricCap('discount.redemptions', { dimensions: ['date', 'discountCode'] }),
+        metricCap('promotions.active', {
+          execution: 'live',
+          grains: [],
+          dimensions: ['discountCode'],
+        }),
+      ],
+    },
+  });
+
+  const report = {
+    id: 'promotion-effectiveness',
+    version: 1,
+    failurePolicy: 'lenient',
+    defaults: { fx: { mode: 'none' } },
+    freshness: {},
+    requiredCapabilities: { metrics: [] },
+  } as unknown as Parameters<typeof planTile>[1];
+
+  const ctx: PlanContext = {
+    projectKey: 'sp-demo',
+    today: '2026-10-14',
+    range: { from: '2026-09-15', to: '2026-10-14' },
+    grain: 'day',
+    timezone: 'UTC',
+    weekStart: 'monday',
+    filters: [],
+    access: allAccess,
+    sources: [source],
+  } as unknown as PlanContext;
+
+  const tileWith = (metrics: string[]) =>
+    ({
+      id: 'by-code',
+      titleKey: 't',
+      span: 12,
+      query: { metrics, dimensions: ['discountCode'], grain: 'inherit', comparison: 'none', filters: [] },
+      chart: { specVersion: 1, type: 'table', encoding: { columns: [] } },
+    }) as unknown as Parameters<typeof planTile>[0];
+
+  it('splits one source into a live and a materialized sub-query when a tile mixes modes', () => {
+    const plan = planTile(tileWith(['promotions.active', 'discount.redemptions']), report, ctx);
+    expect(plan.subQueries).toHaveLength(2);
+    const live = plan.subQueries.find((q) => q.metrics.includes('promotions.active'));
+    const materialized = plan.subQueries.find((q) => q.metrics.includes('discount.redemptions'));
+    // Live sub-query is point-in-time (no time range); materialized one is not.
+    expect(live?.pointInTime).toBe(true);
+    expect(live?.grain).toBeNull();
+    expect(materialized?.pointInTime).toBe(false);
+    // They never share a sub-query — a source can't answer both modes in one call.
+    expect(live).not.toBe(materialized);
+    expect(live?.metrics).not.toContain('discount.redemptions');
+  });
+
+  it('keeps a single sub-query when all metrics share one execution mode', () => {
+    const plan = planTile(tileWith(['discount.redemptions']), report, ctx);
+    expect(plan.subQueries).toHaveLength(1);
+    expect(plan.subQueries[0].metrics).toEqual(['discount.redemptions']);
   });
 });

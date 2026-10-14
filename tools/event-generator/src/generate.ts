@@ -449,10 +449,71 @@ const ensureOrderMetaType = async (client: CtClient): Promise<void> => {
   }
 };
 
+/**
+ * Ensures a real, ACTIVE CartDiscount + DiscountCode exists for each synthetic promo code
+ * (WELCOME10/VIP15/FLASH20). This is what lets promotion-effectiveness list "all live promotions"
+ * from the live CartDiscount/DiscountCode API and join them, by code, with the order redemptions
+ * the orders already carry in their `promoCode` custom field — so even a never-redeemed promotion
+ * shows up with a 0% application rate. Idempotent: cart discounts keyed, codes checked by code.
+ */
+const ensureDiscountCodes = async (client: CtClient): Promise<void> => {
+  for (let i = 0; i < PROMO_CODES.length; i += 1) {
+    const code = PROMO_CODES[i];
+    const cdKey = `reporting-promo-${code.toLowerCase()}`;
+    const permyriad = Math.round(PROMO_RATE[code] * 10_000); // 0.1 → 1000 (10%)
+
+    // 1. Backing cart discount (idempotent by key).
+    const cartDiscountExists = await client
+      .get(`/cart-discounts/key=${cdKey}`)
+      .then(() => true)
+      .catch(() => false);
+    if (!cartDiscountExists) {
+      try {
+        await client.post('/cart-discounts', {
+          key: cdKey,
+          name: { en: code },
+          value: { type: 'relative', permyriad },
+          cartPredicate: '1=1',
+          target: { type: 'lineItems', predicate: '1=1' },
+          // Unique decimal in (0,1), no trailing zero — kept out of the way of the demo's own.
+          sortOrder: `0.500${i + 1}`,
+          isActive: true,
+          requiresDiscountCode: true,
+          stackingMode: 'Stacking',
+        });
+        log('created cart discount', { key: cdKey });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!/Duplicate|already exists|ConcurrentModification|409/i.test(message)) throw error;
+      }
+    }
+
+    // 2. The discount code itself (idempotent by code).
+    const found = await client
+      .get<{ results?: unknown[] }>(`/discount-codes?where=${encodeURIComponent(`code="${code}"`)}`)
+      .catch(() => ({ results: [] }));
+    if (!found.results || found.results.length === 0) {
+      try {
+        await client.post('/discount-codes', {
+          code,
+          name: { en: code },
+          cartDiscounts: [{ typeId: 'cart-discount', key: cdKey }],
+          isActive: true,
+        });
+        log('created discount code', { code });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!/Duplicate|already exists|ConcurrentModification|409/i.test(message)) throw error;
+      }
+    }
+  }
+};
+
 const main = async (): Promise<void> => {
   const client = new CtClient(readConfig(env));
   await ensureCostType(client);
   await ensureOrderMetaType(client);
+  await ensureDiscountCodes(client);
   if (ga4) log('GA4 Measurement Protocol enabled', { debug: ga4Config!.debug });
   else log('GA4 sending disabled (set GA4_MEASUREMENT_ID + GA4_API_SECRET to enable)');
   const mode = process.argv[2] ?? 'seed';

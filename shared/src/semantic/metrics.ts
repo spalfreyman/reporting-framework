@@ -454,6 +454,20 @@ const defs: MetricDef[] = [
   }),
 
   // ── Promotions ───────────────────────────────────────────────────────────────
+  // Live count of currently-active promotions, read from the CartDiscount/DiscountCode API (NOT
+  // a rollup). Its purpose is to surface EVERY live promotion keyed by discountCode so that, when
+  // full-outer-joined with discount.redemptions, a promotion nobody has used still appears with 0
+  // redemptions. Point-in-time, so no time grain.
+  base({
+    id: 'promotions.active',
+    labelKey: 'metric.promotionsActive',
+    valueType: 'count',
+    aggregation: 'sum',
+    additive: { overTime: false, overDimensions: true },
+    domains: ['commerce'],
+    format: INT,
+    nullSemantics: 'zero',
+  }),
   base({
     id: 'discount.redemptions',
     labelKey: 'metric.discountRedemptions',
