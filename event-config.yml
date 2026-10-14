@@ -1,0 +1,435 @@
+- generic [ref=f29e3]:
+  - generic [ref=f29e5]:
+    - region:
+      - generic:
+        - generic:
+          - generic:
+            - generic [ref=f29e892] [cursor=pointer]
+            - generic [ref=f29e896]:
+              - generic [ref=f29e897]:
+                - generic [ref=f29e898]:
+                  - generic [ref=f29e899]: Environment
+                  - generic [ref=f29e903]:
+                    - log [ref=f29e905]
+                    - generic [ref=f29e907] [cursor=pointer]:
+                      - generic [ref=f29e908]: GCP Europe
+                      - combobox [ref=f29e910]
+                - generic [ref=f29e915]:
+                  - generic [ref=f29e916]: User Language
+                  - generic [ref=f29e920]:
+                    - log [ref=f29e922]
+                    - generic [ref=f29e924] [cursor=pointer]:
+                      - generic [ref=f29e925]: English (United Kingdom) (en-GB)
+                      - combobox [ref=f29e927]
+              - generic [ref=f29e932]:
+                - generic [ref=f29e935]:
+                  - text: "Last deployed: 1 hours ago"
+                  - button [ref=f29e937] [cursor=pointer]
+                - generic [ref=f29e938] [cursor=pointer]:
+                  - checkbox "Enable Logs" [ref=f29e939]
+                  - generic [ref=f29e942]: Enable Logs
+                - button [ref=f29e944] [cursor=pointer]
+    - banner [ref=f29e6]:
+      - generic [ref=f29e7]:
+        - button "Back to project" [ref=f29e11] [cursor=pointer]
+        - generic [ref=f29e16]:
+          - generic [ref=f29e17]: User settings menu
+          - combobox "User settings menu" [ref=f29e18]:
+            - button "Open user settings menu" [ref=f29e19] [cursor=pointer]:
+              - generic [ref=f29e20]: SP
+    - complementary
+    - main [ref=f29e24]:
+      - generic [ref=f29e25]:
+        - generic [ref=f29e26]:
+          - dialog "Manage connectors" [ref=f29e28]:
+            - generic [ref=f29e29]:
+              - generic [ref=f29e30]:
+                - button "Go back" [ref=f29e31] [cursor=pointer]
+                - generic [ref=f29e35]: /
+                - generic "Manage connectors" [ref=f29e36]
+              - button "Close Modal Page" [ref=f29e37] [cursor=pointer]
+            - generic [ref=f29e42]:
+              - heading "Manage connectors" [level=1] [ref=f29e44]
+              - tablist [ref=f29e46]:
+                - tab [ref=f29e47] [cursor=pointer]:
+                  - heading "Organization connectors" [level=3] [ref=f29e48]
+                - tab [selected] [ref=f29e49] [cursor=pointer]:
+                  - heading "Installations" [level=3] [ref=f29e50]
+            - generic [ref=f29e947]:
+              - generic [ref=f29e948]:
+                - generic [ref=f29e949]: Filter by type
+                - generic [ref=f29e953]:
+                  - log [ref=f29e955]
+                  - generic [ref=f29e957] [cursor=pointer]:
+                    - generic [ref=f29e958]: Select connector type ...
+                    - combobox [ref=f29e960]
+              - table [ref=f29e966]:
+                - rowgroup [ref=f29e967]:
+                  - row [ref=f29e968]:
+                    - columnheader "Connector" [ref=f29e969]
+                    - columnheader "Project name" [ref=f29e973]
+                    - columnheader "Deployment key" [ref=f29e977]
+                    - columnheader "Status" [ref=f29e981]
+                    - columnheader "Deployment type" [ref=f29e985]
+                    - columnheader "Date installed" [ref=f29e989]
+                    - columnheader "Region" [ref=f29e993]
+                    - columnheader "Build details" [ref=f29e997]
+                - rowgroup [ref=f29e1001]:
+                  - row [ref=f29e1002] [cursor=pointer]:
+                    - cell "reporter" [ref=f29e1003]
+                    - cell "Sam's Demo" [ref=f29e1005]
+                    - cell [ref=f29e1007]
+                    - cell [ref=f29e1009]:
+                      - button "Installation failure" [ref=f29e1012]
+                    - cell "Sandbox" [ref=f29e1018]
+                    - cell "02/09/2026, 12:47" [ref=f29e1020]
+                    - cell "Europe (GCP)" [ref=f29e1022]
+                    - cell [ref=f29e1027]:
+                      - button "Show build details" [ref=f29e1029]
+                  - row [ref=f29e1032] [cursor=pointer]:
+                    - cell "reporter" [ref=f29e1033]
+                    - cell "Sam's Demo" [ref=f29e1035]
+                    - cell [ref=f29e1037]
+                    - cell [ref=f29e1039]:
+                      - button "Installation failure" [ref=f29e1042]
+                    - cell "Sandbox" [ref=f29e1048]
+                    - cell "02/09/2026, 11:39" [ref=f29e1050]
+                    - cell "Europe (GCP)" [ref=f29e1052]
+                    - cell [ref=f29e1057]:
+                      - button "Show build details" [ref=f29e1059]
+                  - row [ref=f29e1062] [cursor=pointer]:
+                    - cell "native source connector" [ref=f29e1063]
+                    - cell "Sam's Demo" [ref=f29e1065]
+                    - cell [ref=f29e1067]
+                    - cell "Installed" [ref=f29e1069]
+                    - cell "Sandbox" [ref=f29e1074]
+                    - cell "02/09/2026, 10:07" [ref=f29e1076]
+                    - cell "Europe (GCP)" [ref=f29e1078]
+                    - cell [ref=f29e1083]:
+                      - button "Show build details" [ref=f29e1085]
+                  - row [ref=f29e1088] [cursor=pointer]:
+                    - cell "ChatGPT Agentic Checkout Integration" [ref=f29e1089]
+                    - cell "BMW_Golf_Demo" [ref=f29e1091]
+                    - cell [ref=f29e1093]
+                    - cell "Installed" [ref=f29e1095]
+                    - cell "Sandbox" [ref=f29e1100]
+                    - cell "26/06/2026, 16:39" [ref=f29e1102]
+                    - cell "Europe (GCP)" [ref=f29e1104]
+                    - cell [ref=f29e1109]
+                  - row [ref=f29e1111] [cursor=pointer]:
+                    - cell "Sample payment connector for checkout" [ref=f29e1112]
+                    - cell "ps_merlin_demo" [ref=f29e1114]
+                    - cell [ref=f29e1116]
+                    - cell "Installed" [ref=f29e1118]
+                    - cell "Sandbox" [ref=f29e1123]
+                    - cell "19/06/2026, 14:38" [ref=f29e1125]
+                    - cell "Europe (GCP)" [ref=f29e1127]
+                    - cell [ref=f29e1132]
+                  - row [ref=f29e1134] [cursor=pointer]:
+                    - cell "Sample payment connector for checkout" [ref=f29e1135]
+                    - cell "ns_demo_a_1" [ref=f29e1137]
+                    - cell [ref=f29e1139]
+                    - cell "Installed" [ref=f29e1141]
+                    - cell "Sandbox" [ref=f29e1146]
+                    - cell "09/06/2026, 11:16" [ref=f29e1148]
+                    - cell "Europe (GCP)" [ref=f29e1150]
+                    - cell [ref=f29e1155]
+                  - row [ref=f29e1157] [cursor=pointer]:
+                    - cell "DG Cart Compatibility v2" [ref=f29e1158]
+                    - cell "DG_Testbed" [ref=f29e1160]
+                    - cell [ref=f29e1162]
+                    - cell "Installed" [ref=f29e1164]
+                    - cell "Sandbox" [ref=f29e1169]
+                    - cell "16/04/2026, 17:18" [ref=f29e1171]
+                    - cell "Europe (GCP)" [ref=f29e1173]
+                    - cell [ref=f29e1178]:
+                      - button "Show build details" [ref=f29e1180]
+                  - row [ref=f29e1183] [cursor=pointer]:
+                    - cell "PayPal for checkout" [ref=f29e1184]
+                    - cell "Sam's Demo" [ref=f29e1186]
+                    - cell [ref=f29e1188]
+                    - cell "Installed" [ref=f29e1190]
+                    - cell "Sandbox" [ref=f29e1195]
+                    - cell "11/08/2025, 17:05" [ref=f29e1197]
+                    - cell "Europe (GCP)" [ref=f29e1199]
+                    - cell [ref=f29e1204]:
+                      - button "Show build details" [ref=f29e1206]
+                  - row [ref=f29e1209] [cursor=pointer]:
+                    - cell "Sample payment connector for checkout" [ref=f29e1210]
+                    - cell "Sam's Demo" [ref=f29e1212]
+                    - cell [ref=f29e1214]
+                    - cell "Installed" [ref=f29e1216]
+                    - cell "Sandbox" [ref=f29e1221]
+                    - cell "05/08/2025, 08:47" [ref=f29e1223]
+                    - cell "Europe (GCP)" [ref=f29e1225]
+                    - cell [ref=f29e1230]
+              - generic [ref=f29e1232]:
+                - generic [ref=f29e1234]:
+                  - generic [ref=f29e1238]:
+                    - log [ref=f29e1240]
+                    - generic [ref=f29e1242] [cursor=pointer]:
+                      - generic [ref=f29e1243]: "20"
+                      - combobox "Items per page (9 items)" [ref=f29e1244]
+                  - generic [ref=f29e1249]: Items per page (9 items)
+                - generic [ref=f29e1252]:
+                  - button "Previous page" [disabled] [ref=f29e1253]
+                  - generic [ref=f29e1256]: Page
+                  - spinbutton "Page" [ref=f29e1260]: "1"
+                  - generic [ref=f29e1261]: of 1
+                  - button "Next page" [disabled] [ref=f29e1263]
+          - dialog "reporter - Sam's Demo" [ref=f29e1267]:
+            - generic [ref=f29e1268]:
+              - generic [ref=f29e1269]:
+                - button "Go back" [ref=f29e1270] [cursor=pointer]
+                - generic [ref=f29e1274]: /
+                - generic "Manage connectors | reporter - Sam's Demo" [ref=f29e1275]
+              - button "Close Modal Page" [ref=f29e1276] [cursor=pointer]
+            - generic [ref=f29e1281]:
+              - generic [ref=f29e1282]:
+                - heading "reporter - Sam's Demo" [level=1] [ref=f29e1283]
+                - generic [ref=f29e1285]:
+                  - generic [ref=f29e1286]: Installation failure
+                  - generic [ref=f29e1289]: Europe (GCP)
+              - generic [ref=f29e1292]:
+                - tablist [ref=f29e1293]:
+                  - tab [selected] [ref=f29e1294] [cursor=pointer]:
+                    - heading "Apps" [level=3] [ref=f29e1295]
+                  - tab [ref=f29e1296] [cursor=pointer]:
+                    - heading "App logs" [level=3] [ref=f29e1297]
+                  - tab [ref=f29e1298] [cursor=pointer]:
+                    - heading "Build details" [level=3] [ref=f29e1299]
+                - generic [ref=f29e1301]:
+                  - button "Revert changes" [ref=f29e1705] [cursor=pointer]
+                  - button "Redeploy" [disabled] [ref=f29e1308]
+            - generic [ref=f29e1432]:
+              - generic [ref=f29e1436]:
+                - paragraph [ref=f29e1437]: reporter apps (4)
+                - generic [ref=f29e1438]:
+                  - button [ref=f29e1439] [cursor=pointer]:
+                    - paragraph [ref=f29e1444]: reporting-app
+                  - button [ref=f29e1448] [cursor=pointer]:
+                    - paragraph [ref=f29e1453]: reporting-gateway
+                  - button [active] [ref=f29e1457] [cursor=pointer]:
+                    - paragraph [ref=f29e1462]: reporting-rollup-event
+                  - button [ref=f29e1466] [cursor=pointer]:
+                    - paragraph [ref=f29e1471]: reporting-rollup-job
+              - generic [ref=f29e1478]:
+                - generic [ref=f29e1479]:
+                  - paragraph [ref=f29e1480]: reporting-rollup-event
+                  - separator [ref=f29e1481]
+                - generic [ref=f29e1482]:
+                  - generic [ref=f29e1544]:
+                    - generic [ref=f29e1545]:
+                      - generic [ref=f29e1549]:
+                        - text: CTP_PROJECT_KEY
+                        - emphasis [ref=f29e1550]: "*"
+                      - generic [ref=f29e1551]: commercetools Composable Commerce project key.
+                    - textbox "CTP_PROJECT_KEY *" [ref=f29e1555]: sp-demo
+                  - generic [ref=f29e1557]:
+                    - generic [ref=f29e1558]:
+                      - generic [ref=f29e1562]:
+                        - text: CTP_REGION
+                        - emphasis [ref=f29e1563]: "*"
+                      - generic [ref=f29e1564]: Region of the project.
+                    - textbox "CTP_REGION *" [ref=f29e1568]:
+                      - /placeholder: europe-west1.gcp
+                      - text: europe-west1.gcp
+                  - generic [ref=f29e1816]:
+                    - generic [ref=f29e1817]:
+                      - generic [ref=f29e1821]:
+                        - text: ROLLUP_TIMEZONE
+                        - emphasis [ref=f29e1822]: "*"
+                      - generic [ref=f29e1823]: IANA timezone defining the reporting day boundary. MUST match the value on reporting-rollup-job or day buckets will disagree.
+                    - textbox "ROLLUP_TIMEZONE *" [ref=f29e1827]:
+                      - /placeholder: UTC
+                      - text: UTC
+                  - generic [ref=f29e1829]:
+                    - generic [ref=f29e1830]:
+                      - generic [ref=f29e1831]: SUBSCRIPTION_KEY
+                      - generic [ref=f29e1835]: Key of the Subscription created by postDeploy.
+                    - textbox "SUBSCRIPTION_KEY" [ref=f29e1839]:
+                      - /placeholder: reporting-rollup-event
+                      - text: reporting-rollup-event
+                  - generic [ref=f29e1672]:
+                    - generic [ref=f29e1674]:
+                      - generic [ref=f29e1678]:
+                        - text: CTP_CLIENT_SECRET
+                        - emphasis [ref=f29e1679]: "*"
+                      - generic [ref=f29e1680]: After saving, the secret is no longer visible for security reasons, but is still active unless you overwrite it with a new value.
+                      - generic [ref=f29e1683]: commercetools API client secret.
+                    - textbox "CTP_CLIENT_SECRET *" [ref=f29e1687]: ••••••••••
+                  - generic [ref=f29e1655]:
+                    - generic [ref=f29e1657]:
+                      - generic [ref=f29e1661]:
+                        - text: CTP_CLIENT_ID
+                        - emphasis [ref=f29e1662]: "*"
+                      - generic [ref=f29e1663]: After saving, the secret is no longer visible for security reasons, but is still active unless you overwrite it with a new value.
+                      - generic [ref=f29e1666]: API client ID with view_orders, manage_subscriptions, manage_key_value_documents.
+                    - textbox "CTP_CLIENT_ID *" [ref=f29e1670]: ••••••••••
+                  - generic [ref=f29e1689]:
+                    - generic [ref=f29e1691]:
+                      - generic [ref=f29e1695]:
+                        - text: CTP_SCOPE
+                        - emphasis [ref=f29e1696]: "*"
+                      - generic [ref=f29e1697]: After saving, the secret is no longer visible for security reasons, but is still active unless you overwrite it with a new value.
+                      - generic [ref=f29e1700]: Space-separated OAuth scopes.
+                    - textbox "CTP_SCOPE *" [ref=f29e1704]: ••••••••••
+                  - generic [ref=f29e1535]:
+                    - generic [ref=f29e1536]: Application type
+                    - textbox "Application type" [ref=f29e1542]: event
+        - generic [ref=f29e528]:
+          - paragraph [ref=f29e529]:
+            - text: This site uses cookies. See our
+            - link "privacy policy" [ref=f29e530] [cursor=pointer]:
+              - /url: https://commercetools.com/privacy#website
+            - text: or manage your
+            - link "cookies settings" [ref=f29e531] [cursor=pointer]:
+              - /url: ""
+            - text: here.
+          - button "Accept all cookies" [ref=f29e532] [cursor=pointer]
+        - generic [ref=f29e535]:
+          - navigation [ref=f29e536]:
+            - link [ref=f29e537] [cursor=pointer]:
+              - /url: /account/profile
+              - paragraph [ref=f29e544]: My profile
+            - link [ref=f29e545] [cursor=pointer]:
+              - /url: /account/projects
+              - paragraph [ref=f29e552]: Projects
+            - link [ref=f29e553] [cursor=pointer]:
+              - /url: /account/organizations
+              - paragraph [ref=f29e560]: Organizations & teams
+            - link [ref=f29e561] [cursor=pointer]:
+              - /url: /account/ai-usage
+              - paragraph [ref=f29e569]: AI Usage
+          - generic [ref=f29e571]:
+            - generic [ref=f29e572]:
+              - button "To organizations" [ref=f29e574] [cursor=pointer]
+              - heading "Sam's Demo Organization" [level=1] [ref=f29e579]
+              - generic [ref=f29e580]:
+                - tablist [ref=f29e581]:
+                  - tab [ref=f29e582] [cursor=pointer]:
+                    - heading "Teams" [level=3] [ref=f29e583]
+                  - tab [selected] [ref=f29e584] [cursor=pointer]:
+                    - heading "Connect" [level=3] [ref=f29e585]
+                  - tab [ref=f29e586] [cursor=pointer]:
+                    - heading "Custom Applications" [level=3] [ref=f29e587]
+                  - tab [ref=f29e588] [cursor=pointer]:
+                    - heading "Custom Views" [level=3] [ref=f29e589]
+                - generic [ref=f29e591]:
+                  - button "Open edit organization name" [ref=f29e593] [cursor=pointer]
+                  - button "Open delete organization" [ref=f29e597] [cursor=pointer]
+            - generic [ref=f29e603]:
+              - generic [ref=f29e605]:
+                - heading "Discover all available connectors" [level=1] [ref=f29e606]
+                - button "Manage connectors" [ref=f29e607] [cursor=pointer]
+              - generic [ref=f29e609]:
+                - generic [ref=f29e610]:
+                  - 'button "Section: View Switcher Public Connector" [ref=f29e611] [cursor=pointer]':
+                    - generic [ref=f29e612]: Public connectors
+                  - 'button "Section: View Switcher Private Connector" [ref=f29e613] [cursor=pointer]':
+                    - generic [ref=f29e614]: Organization connectors
+                - separator [ref=f29e615]
+                - generic [ref=f29e618]:
+                  - generic [ref=f29e620]:
+                    - textbox "Search connector type" [ref=f29e621]
+                    - button "search-button" [ref=f29e622] [cursor=pointer]
+                  - generic [ref=f29e626]:
+                    - generic [ref=f29e627]: Filter by type
+                    - generic [ref=f29e631]:
+                      - log [ref=f29e633]
+                      - generic [ref=f29e635] [cursor=pointer]:
+                        - generic [ref=f29e636]: Select connector type ...
+                        - combobox [ref=f29e638]
+              - generic [ref=f29e645]:
+                - generic [ref=f29e650]:
+                  - img "Voucherify" [ref=f29e653]
+                  - generic [ref=f29e654]:
+                    - generic [ref=f29e656]:
+                      - 'region "Section: Card Title" [ref=f29e658]':
+                        - heading "Voucherify" [level=4] [ref=f29e659]
+                      - 'region "Section: Card Content" [ref=f29e661]':
+                        - generic [ref=f29e662]: API-first Promotion Engine for Digital Teams
+                    - generic [ref=f29e665]:
+                      - button "Install" [ref=f29e666] [cursor=pointer]
+                      - button "Learn more" [ref=f29e669] [cursor=pointer]
+                - generic [ref=f29e675]:
+                  - img "fulfillmenttools" [ref=f29e678]
+                  - generic [ref=f29e679]:
+                    - generic [ref=f29e681]:
+                      - 'region "Section: Card Title" [ref=f29e683]':
+                        - heading "fulfillmenttools" [level=4] [ref=f29e684]
+                      - 'region "Section: Card Content" [ref=f29e686]':
+                        - generic [ref=f29e687]: fulfillmenttools is the Agentic Order Management System built for modern enterprise retail.
+                    - generic [ref=f29e690]:
+                      - button "Install" [ref=f29e691] [cursor=pointer]
+                      - button "Learn more" [ref=f29e694] [cursor=pointer]
+                - generic [ref=f29e700]:
+                  - img "Braintree for Composable Commerce" [ref=f29e703]
+                  - generic [ref=f29e704]:
+                    - generic [ref=f29e706]:
+                      - 'region "Section: Card Title" [ref=f29e708]':
+                        - heading "Braintree for Composable Commerce" [level=4] [ref=f29e709]
+                      - 'region "Section: Card Content" [ref=f29e711]':
+                        - generic [ref=f29e712]: Braintree connector for commercetools Composable Commerce.
+                    - generic [ref=f29e715]:
+                      - button "Install" [ref=f29e716] [cursor=pointer]
+                      - button "Learn more" [ref=f29e719] [cursor=pointer]
+                - generic [ref=f29e725]:
+                  - img "Bloomreach engagement" [ref=f29e728]
+                  - generic [ref=f29e729]:
+                    - generic [ref=f29e731]:
+                      - 'region "Section: Card Title" [ref=f29e733]':
+                        - heading "Bloomreach engagement" [level=4] [ref=f29e734]
+                      - 'region "Section: Card Content" [ref=f29e736]':
+                        - generic [ref=f29e737]: Synchronize all products and customers from commercetools to Bloomreach Engagement
+                    - generic [ref=f29e740]:
+                      - button "Install" [ref=f29e741] [cursor=pointer]
+                      - button "Learn more" [ref=f29e744] [cursor=pointer]
+                - generic [ref=f29e750]:
+                  - img "Bloomreach discovery" [ref=f29e753]
+                  - generic [ref=f29e754]:
+                    - generic [ref=f29e756]:
+                      - 'region "Section: Card Title" [ref=f29e758]':
+                        - heading "Bloomreach discovery" [level=4] [ref=f29e759]
+                      - 'region "Section: Card Content" [ref=f29e761]':
+                        - generic [ref=f29e762]: Synchronize all products from commercetools to Bloomreach Discovery
+                    - generic [ref=f29e765]:
+                      - button "Install" [ref=f29e766] [cursor=pointer]
+                      - button "Learn more" [ref=f29e769] [cursor=pointer]
+                - generic [ref=f29e775]:
+                  - img "Klaviyo" [ref=f29e778]
+                  - generic [ref=f29e779]:
+                    - generic [ref=f29e781]:
+                      - 'region "Section: Card Title" [ref=f29e783]':
+                        - heading "Klaviyo" [level=4] [ref=f29e784]
+                      - 'region "Section: Card Content" [ref=f29e786]':
+                        - generic [ref=f29e787]: Intelligent marketing automation and customer data platform
+                    - generic [ref=f29e790]:
+                      - button "Install" [ref=f29e791] [cursor=pointer]
+                      - button "Learn more" [ref=f29e794] [cursor=pointer]
+                - generic [ref=f29e800]:
+                  - img "NewStore" [ref=f29e803]
+                  - generic [ref=f29e804]:
+                    - generic [ref=f29e806]:
+                      - 'region "Section: Card Title" [ref=f29e808]':
+                        - heading "NewStore" [level=4] [ref=f29e809]
+                      - 'region "Section: Card Content" [ref=f29e811]':
+                        - generic [ref=f29e812]: NewStore Omnichannel Platform
+                    - generic [ref=f29e815]:
+                      - button "Install" [ref=f29e816] [cursor=pointer]
+                      - button "Learn more" [ref=f29e819] [cursor=pointer]
+                - generic [ref=f29e825]:
+                  - img "Talon.One" [ref=f29e828]
+                  - generic [ref=f29e829]:
+                    - generic [ref=f29e831]:
+                      - 'region "Section: Card Title" [ref=f29e833]':
+                        - heading "Talon.One" [level=4] [ref=f29e834]
+                      - 'region "Section: Card Content" [ref=f29e836]':
+                        - generic [ref=f29e837]: The world's most flexible Promotion Engine
+                    - generic [ref=f29e840]:
+                      - button "Install" [ref=f29e841] [cursor=pointer]
+                      - button "Learn more" [ref=f29e844] [cursor=pointer]
+              - generic [ref=f29e848]:
+                - generic [ref=f29e849]: Showing 8 of 36 items
+                - button "Load More" [ref=f29e850] [cursor=pointer]
+  - separator "Resize side panel" [ref=f29e856]
