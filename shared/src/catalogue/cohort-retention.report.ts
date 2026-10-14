@@ -26,7 +26,7 @@ export const cohortRetention: ReportDefinitionInput = {
   "optionalMetrics": [],
   "failurePolicy": "lenient",
   "defaults": {
-    "datePreset": "last28d",
+    "datePreset": "last90d",
     "grain": "day",
     "timezone": "project",
     "weekStart": "monday",
